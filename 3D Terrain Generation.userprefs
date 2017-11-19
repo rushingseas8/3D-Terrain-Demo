@@ -1,0 +1,16 @@
+﻿<Properties StartupItem="Assembly-CSharp.csproj">
+  <MonoDevelop.Ide.Workspace ActiveConfiguration="Debug" PreferredExecutionTarget="Unity.Instance.Unity Editor" />
+  <MonoDevelop.Ide.Workbench ActiveDocument="Assets/Scripts/Generator.cs">
+    <Files>
+      <File FileName="Assets/Scripts/GameManager.cs" Line="92" Column="4" />
+      <File FileName="Assets/Scripts/Controller.cs" Line="25" Column="2" />
+      <File FileName="Assets/Scripts/Generator.cs" Line="37" Column="16" />
+      <File FileName="Assets/MarchingCubes/Example.cs" Line="63" Column="28" />
+      <File FileName="Assets/MarchingCubes/Marching/Marching.cs" Line="1" Column="1" />
+    </Files>
+  </MonoDevelop.Ide.Workbench>
+  <MonoDevelop.Ide.DebuggingService.Breakpoints>
+    <BreakpointStore />
+  </MonoDevelop.Ide.DebuggingService.Breakpoints>
+  <MonoDevelop.Ide.DebuggingService.PinnedWatches />
+</Properties>

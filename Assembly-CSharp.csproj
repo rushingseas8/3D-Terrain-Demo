@@ -92,6 +92,7 @@
      <Compile Include="Assets\MarchingCubes\Marching\MarchingTertahedron.cs" />
      <Compile Include="Assets\Scripts\Controller.cs" />
      <Compile Include="Assets\Scripts\GameManager.cs" />
+     <Compile Include="Assets\Scripts\GenerateWorms.cs" />
      <Compile Include="Assets\Scripts\Generator.cs" />
  <Reference Include="UnityEngine.UI">
  <HintPath>/Applications/Unity/Unity.app/Contents/UnityExtensions/Unity/GUISystem/UnityEngine.UI.dll</HintPath>

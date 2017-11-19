@@ -15,13 +15,18 @@ public class Controller : MonoBehaviour {
 
 	public Camera mainCamera;
 
-	public static float thirdPersonDistance = 0;
+	public float thirdPersonDistance = 10.0f;
+	public float jumpVelocity = 5.0f;
 
-	public static bool flyingMode = true;
+	public static bool flyingMode = false;
     public static bool cameraKeyLock = true;
 
-	private static float movementScale = 0.3f;
-	private static float rotationScale = 5f;
+	private float movementScale = 6f;
+	private float rotationScale = 5f;
+
+	private static int xChunk = 0;
+	private static int yChunk = 0;
+	private static int zChunk = 0;
 
 	// Use this for initialization
 	void Start () {
@@ -72,47 +77,63 @@ public class Controller : MonoBehaviour {
 		Vector3 newPosition = oldPosition;
 		Quaternion newRotation = oldRotation;
 
+		Quaternion angle = Quaternion.AngleAxis (mainCamera.transform.rotation.eulerAngles.y, Vector3.up);
+		float newMovementScale = movementScale;
+		bool onGround = false;
+
+		if (Physics.Raycast (oldPosition, Vector3.down, 3.0f)) {
+			onGround = true;
+		}
+
 		if (Input.GetKeyDown (KeyCode.Escape)) {
 			Cursor.lockState = CursorLockMode.None;
 		}
 
-		float planeRotation = mainCamera.transform.rotation.eulerAngles.y;
-		Quaternion quat = Quaternion.Euler (new Vector3 (0, planeRotation, 0));
-
-		Quaternion ang = Quaternion.identity;
-
-		bool onGround = false;
-
-        float newMovementScale = movementScale;
-
-        if (Input.GetKeyUp(cameraLock))
-        {
+		if (Input.GetKeyUp(cameraLock)) {
             cameraKeyLock = !cameraKeyLock;
-            Debug.Log("Smashed that mfing escape key dawg.");
         }
-        if (Input.GetKey(slow))
-        {
+        if (Input.GetKey(slow)) {
             newMovementScale *= 0.5f;
         }
+
+		/*
 		if (keycodePressed (forward)) {
-			newPosition += (ang * quat * Vector3.forward * newMovementScale);
+			newPosition += (angle * Vector3.forward * newMovementScale);
 		}
 		if (keycodePressed (backward)) {
-			newPosition += (ang * quat * Vector3.back * newMovementScale);
+			newPosition += (angle * Vector3.back * newMovementScale);
 		}
 		if (keycodePressed (left)) {
-			newPosition += (ang * quat * Vector3.left * newMovementScale);
+			newPosition += (angle * Vector3.left * newMovementScale);
 		}
 		if (keycodePressed (right)) {
-			newPosition += (ang * quat * Vector3.right * newMovementScale);
+			newPosition += (angle * Vector3.right * newMovementScale);
 		}
+		*/
+		/*
+		if (keycodePressed (forward)) {
+			GetComponent<Rigidbody> ().AddForce (angle * Vector3.forward * newMovementScale);
+		}
+		if (keycodePressed (backward)) {
+			GetComponent<Rigidbody> ().AddForce (angle * Vector3.back * newMovementScale);
+		}
+		if (keycodePressed (left)) {
+			GetComponent<Rigidbody> ().AddForce (angle * Vector3.left * newMovementScale);
+		}
+		if (keycodePressed (right)) {
+			GetComponent<Rigidbody> ().AddForce (angle * Vector3.right * newMovementScale);
+		}
+		*/
 
-        if (cameraKeyLock)
-        {
+		//GetComponent<Rigidbody> ().AddForce (new Vector3(Input.GetAxis("Horizontal"), 0, Input.GetAxis("Vertical")) * movementScale);
+		float oldYVelocity = GetComponent<Rigidbody> ().velocity.y;
+		Vector3 newVelocity = angle * new Vector3 (Input.GetAxis ("Horizontal"), 0.0f, Input.GetAxis ("Vertical")) * movementScale;
+		GetComponent<Rigidbody> ().velocity = new Vector3 (newVelocity.x, oldYVelocity, newVelocity.z);
+
+        if (cameraKeyLock) {
             Cursor.lockState = CursorLockMode.Locked;
             Cursor.visible = false;
-        } else
-        {
+        } else {
             Cursor.lockState = CursorLockMode.None;
             Cursor.visible = true;
         }
@@ -121,18 +142,17 @@ public class Controller : MonoBehaviour {
 			if (keycodePressed (up)) {
 				newPosition += (Vector3.up * movementScale);
 			}
+			if (keycodePressed (down)) {
+				newPosition += (Vector3.down * movementScale);
+			}
 		} else {
 			//Only jump if we're on the ground (or very close)
 			if (keycodeDown (up)) {	
 				if (onGround) {
-					this.gameObject.GetComponent<Rigidbody> ().velocity = new Vector3 (0, 5, 0);
+					//this.gameObject.GetComponent<Rigidbody> ().velocity = new Vector3 (0, jumpVelocity, 0);
+					Vector3 oldVelocity = GetComponent<Rigidbody> ().velocity;
+					GetComponent<Rigidbody> ().velocity = new Vector3 (oldVelocity.x, jumpVelocity, oldVelocity.z);
 				}
-			}
-		}
-			
-		if (flyingMode) {
-			if (keycodePressed (down)) {
-				newPosition += (Vector3.down * movementScale);
 			}
 		}
 
@@ -141,8 +161,8 @@ public class Controller : MonoBehaviour {
 		if (mouseX != 0 || mouseY != 0) {
 			Vector3 rot = oldRotation.eulerAngles;
 
+			/*
 			float xRot = rot.x;
-
 			float tent = rot.x + (rotationScale * mouseY);
 
 			if (xRot > 270 && tent < 270) {
@@ -155,20 +175,29 @@ public class Controller : MonoBehaviour {
             
 
             float newYRot = rot.y + (rotationScale * mouseX);
+            */
 
+			/*
             newRotation = Quaternion.Euler (
 				new Vector3 (
 					xRot,
 					newYRot,
 					0));
-		}
+					*/
 
+			newRotation = Quaternion.Euler (new Vector3 (
+				rot.x + (rotationScale * mouseY),
+				rot.y + (rotationScale * mouseX),
+				0));
+		}
+			
+		Debug.Log (thirdPersonDistance);
 		thirdPersonDistance -= Input.GetAxis ("Mouse ScrollWheel");
 		if (thirdPersonDistance < 0)
 			thirdPersonDistance = 0;
 
 		this.gameObject.transform.position = newPosition;
-		this.gameObject.transform.rotation = ang;
+		this.gameObject.transform.rotation = angle;
 
 		mainCamera.transform.position = newPosition + (newRotation * new Vector3 (0, 0, -thirdPersonDistance));
 		mainCamera.transform.rotation = newRotation;

@@ -2,182 +2,125 @@
 using System.Collections.Generic;
 using UnityEngine;
 
-public class Generator {
+using LibNoise.Generator;
+using MarchingCubesProject;
 
-	public static int size = 3;
-	public static bool[] data;
+public class Generator : MonoBehaviour {
 
-	private static int UP = 1;
-	private static int DOWN = 2;
-	private static int RIGHT = 4;
-	private static int LEFT = 8;
-	private static int FORWARD = 16;
-	private static int BACKWARD = 32;
+	private static Perlin perlin;
+
+	public static int size = 32;
+	public static float scale = 16f;
+	public static float[] data;
 
 	private static Material defaultMaterial;
 	private static PhysicMaterial defaultPhysics;
 
-	static Generator() {
-		defaultPhysics = new PhysicMaterial ();
-		defaultPhysics.bounciness = 0f;
-		defaultPhysics.dynamicFriction = 0.4f;
-		defaultPhysics.staticFriction = 0.7f;
-	}
+	private static GameObject[,,] chunks;
 
-	private static int getBitvector(int x, int y, int z) {
-		int toReturn = 0;
-		if (data [coordsToIndex (x, y + 1, z)]) {
-			toReturn += UP;
-		}
-		if (data [coordsToIndex (x, y - 1, z)]) {
-			toReturn += DOWN;
-		}
-		if (data [coordsToIndex (x + 1, y, z)]) {
-			toReturn += RIGHT;
-		}
-		if (data [coordsToIndex (x - 1, y, z)]) {
-			toReturn += LEFT;
-		}
-		if (data [coordsToIndex (x, y, z + 1)]) {
-			toReturn += FORWARD;
-		}
-		if (data [coordsToIndex (x, y, z - 1)]) {
-			toReturn += BACKWARD;
-		}
-		return toReturn;
-	}
-
-	private static int getNumNeighbors(int bv) {
-		int count = 0;
-		while (bv != 0) {
-			count += bv & 1;
-			bv = bv >> 1;
-		}
-		return count;
-	}
-
-	public static int coordsToIndex(int x, int y, int z) {
+	public static int coordsToIndex(int size, int x, int y, int z) {
 		return (x * size * size) + (y * size) + z;
 	}
 
-	public static Vector3 indexToCoords(int i) {
+	public static Vector3 indexToCoords(int size, int i) {
 		return new Vector3 ((i / size / size) % size, (i / size) % size, i % size);
 	}
 
 	public static void generate() {
-		data = new bool[size * size * size];
-		for (int i = 0; i < data.Length; i++) {
-			data [i] = false;
+		perlin = new Perlin ();
+		perlin.OctaveCount = 10;
+
+		int count = 3;
+
+		for (int i = 0; i < count; i++) {
+			for (int j = 0; j < count; j++) {
+				for (int k = 0; k < count; k++) {
+					generateObj (new Vector3 (i, j, k));
+				}
+			}
 		}
+	}
 
-		// Center point is always on
-		data [coordsToIndex (1, 1, 1)] = true;
+	private static void generateObj(Vector3 position) {
+		int sp1 = size + 1;
+		data = new float[sp1 * sp1 * sp1];
 
-		data [coordsToIndex (1, 0, 1)] = true; // DOWN
-		data [coordsToIndex (1, 2, 1)] = true; // UP
-
-		data [coordsToIndex (0, 1, 1)] = true; // LEFT
-		data [coordsToIndex (2, 1, 1)] = true; // RIGHT
-
-		//data [coordsToIndex (1, 1, 0)] = true; // BACK
-		data [coordsToIndex (1, 1, 2)] = true; // FRONT
+		float offsetScale = size / scale;
+		Vector3 offset = new Vector3 (position.x * offsetScale, position.y * offsetScale, position.z * offsetScale);
 
 		// Vertex array
-		Vector3[] vertices = new Vector3[size * size * size];
-		for (int i = 0; i < size; i++) {
-			for (int j = 0; j < size; j++) {
-				for (int k = 0; k < size; k++) {
-					vertices [coordsToIndex (i, j, k)] = new Vector3 (i, j, k);
+		for (int i = 0; i < sp1; i++) {
+			for (int j = 0; j < sp1; j++) {
+				for (int k = 0; k < sp1; k++) {
+					data [coordsToIndex (sp1, i, j, k)] = (float)perlin.GetValue(
+						offset.x + (i / scale), offset.y + (j / scale), offset.z + (k / scale));
 				}
 			}
 		}
 
-		int[] tris = generateTriangles (1, 1, 1);
+		List<Vector3> verts = new List<Vector3> ();
+		List<int> tris = new List<int> ();
+
+		Marching marching = new MarchingCubes ();
+		marching.Surface = 0f;
+
+		marching.Generate(data, sp1, sp1, sp1, verts, tris);
+
+		List<int> reverseTris = new List<int>();
+		for (int i = 0; i < tris.Count; i += 3) {
+			reverseTris.Add (tris [i]);
+			reverseTris.Add (tris [i + 2]);
+			reverseTris.Add (tris [i + 1]);
+		}
+
+
+		//Debug.Log (verts.Count);
 
 		Mesh mesh = new Mesh ();
-		mesh.vertices = vertices;
-		mesh.triangles = tris;
+		mesh.vertices = verts.ToArray();
+		mesh.triangles = tris.ToArray();
 		mesh.RecalculateNormals();
+
+		Mesh mesh2 = new Mesh ();
+		mesh2.vertices = verts.ToArray ();
+		mesh2.triangles = reverseTris.ToArray();
+		mesh2.RecalculateNormals();
 
 		GameObject newObj = new GameObject ();
 		newObj.AddComponent<MeshFilter> ();
 		newObj.AddComponent<MeshRenderer> ();
+		newObj.AddComponent<MeshCollider> ();
 
 		newObj.GetComponent<MeshFilter> ().mesh = mesh;
 		newObj.GetComponent<MeshRenderer> ().material = new Material(Shader.Find("Diffuse"));
+		newObj.GetComponent<MeshCollider>().sharedMesh = mesh; 
 
-		//newObj.GetComponent<MeshCollider>().sharedMesh = mesh; 
+		newObj.transform.position = new Vector3(position.z * size, position.y * size, position.x * size);
 
-		newObj.transform.position = new Vector3(0,0,0);
+		GameObject newObj2 = new GameObject ();
+		newObj2.AddComponent<MeshFilter> ();
+		newObj2.AddComponent<MeshRenderer> ();
+		newObj2.AddComponent<MeshCollider> ();
 
+		newObj2.GetComponent<MeshFilter> ().mesh = mesh2;
+		newObj2.GetComponent<MeshRenderer> ().material = new Material(Shader.Find("Diffuse"));
+		newObj2.GetComponent<MeshCollider>().sharedMesh = mesh2; 
+
+		newObj2.transform.position = new Vector3(position.z * size, position.y * size, position.x * size);
 	}
 
-	// Creates a triangle fan around "self", given adjacent vertices in "arr".
-	private static int[] cycle(int self, int[] arr) {
-		int[] toReturn = new int[arr.Length * 3];
-		for (int i = 0; i < arr.Length; i++) {
-			toReturn [(i * 3) + 0] = self;
-			toReturn [(i * 3) + 1] = arr[i % arr.Length];
-			toReturn [(i * 3) + 2] = arr[(i + 1) % arr.Length];
-		}
-		return toReturn;
+	private IEnumerator generateAsync(Vector3 position, GameObject unfinishedObj) {
+		yield return null;
 	}
 
-	// Assumes data is computed
-	public static int[] generateTriangles(int x, int y, int z) {
-		//List<int> toReturnList = new List<int> ();
-		int bv = getBitvector (x, y, z);
-		int count = getNumNeighbors (bv);
+	void Start() {
+		defaultPhysics = new PhysicMaterial ();
+		defaultPhysics.bounciness = 0.0f;
+		defaultPhysics.dynamicFriction = 0.4f;
+		defaultPhysics.staticFriction = 0.4f;
+	}
 
-		int self = coordsToIndex (x, y, z);
-		int up = coordsToIndex (x, y + 1, z);
-		int down = coordsToIndex (x, y - 1, z);
-		int left = coordsToIndex (x - 1, y, z);
-		int right = coordsToIndex (x + 1, y, z);
-		int forward = coordsToIndex (x, y, z + 1);
-		int backward = coordsToIndex (x, y, z - 1);
-
-		switch (count) {
-		case 6:
-			return null;
-		case 5:
-			if ((bv & UP) == 0) {
-				return cycle (self, new int[] { left, forward, right, backward });
-			} else if ((bv & DOWN) == 0) {
-				return cycle (self, new int[] { right, forward, left, backward });
-			} else if ((bv & LEFT) == 0) {
-				return cycle (self, new int[] { up, backward, down, forward });
-			} else if ((bv & RIGHT) == 0) {
-				return cycle (self, new int[] { up, forward, down, backward });
-			} else if ((bv & FORWARD) == 0) {
-				return cycle (self, new int[] { up, left, down, right });
-			} else if ((bv & BACKWARD) == 0) {
-				return cycle (self, new int[] { up, right, down, left });
-			}
-			return null;
-		default:
-			return null;
-		}
-
-
-		/*
-				toReturnList.Add (coordsToIndex(x, y, z));
-				toReturnList.Add (coordsToIndex (x + 1, y, z));
-				toReturnList.Add (coordsToIndex (x, y, z + 1));
-
-				toReturnList.Add (coordsToIndex(x, y, z));
-				toReturnList.Add (coordsToIndex (x, y, z + 1));
-				toReturnList.Add (coordsToIndex (x - 1, y, z));
-
-				toReturnList.Add (coordsToIndex(x, y, z));
-				toReturnList.Add (coordsToIndex (x - 1, y, z));
-				toReturnList.Add (coordsToIndex (x, y, z - 1));
-
-				toReturnList.Add (coordsToIndex(x, y, z));
-				toReturnList.Add (coordsToIndex (x, y, z - 1));
-				toReturnList.Add (coordsToIndex (x + 1, y, z));
-				*/
-
-		//return toReturnList.ToArray();
+	void Update() {
+		
 	}
 }

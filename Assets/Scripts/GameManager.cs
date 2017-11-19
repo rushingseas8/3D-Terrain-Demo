@@ -5,15 +5,13 @@ using UnityEngine;
 using LibNoise.Generator;
 
 public class GameManager : MonoBehaviour {
-
-	private Perlin perlin;
+	
 	//private bool[,,] data;
 	private bool[] data;
 	private Vector3[] dataVec;
 
 	// Use this for initialization
 	void Start () {
-		perlin = new Perlin ();
 
 		/*
 		int length = 10;
@@ -92,19 +90,6 @@ public class GameManager : MonoBehaviour {
 		}
 	}
 	*/
-
-	private void OnDrawGizmos() {
-		if (Generator.data == null) {
-			return;
-		}
-
-		Gizmos.color = Color.black;
-		for (int i = 0; i < Generator.data.Length; i++) {
-			if (Generator.data [i]) {
-				Gizmos.DrawSphere (Generator.indexToCoords(i), 0.1f);
-			}
-		}
-	}
 	
 	// Update is called once per frame
 	void Update () {
