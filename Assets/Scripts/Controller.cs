@@ -209,27 +209,44 @@ public class Controller : MonoBehaviour {
 		} else if (newYChunk > yChunk) {
 			yChunk = newYChunk;
 			movementDir = Direction.UP;
-		} else if (newZChunk < zChunk) {
+		} 
+		/*
+		else if (newZChunk < zChunk) {
 			zChunk = newZChunk;
 			movementDir = Direction.BACK;
 		} else if (newZChunk > zChunk) {
 			zChunk = newZChunk;
 			movementDir = Direction.FRONT;
 		}
+		*/
 
 		if (movementDir != Direction.NONE) {
 			Generator.shiftArray(movementDir);
-			int[] regenerateIndices = CubeBuffer<GameObject>.faceIndices[(int)movementDir];
+			int[] regenerateIndices = CubeBuffer.faceIndices[(int)movementDir];
 			for (int i = 0; i < regenerateIndices.Length; i++) {
-				Vector3Int pos = Generator.indexToCoords(Generator.renderDiameter, regenerateIndices[i]);
+				Vector3Int pos = Helper.indexToCoords(Generator.renderDiameter, regenerateIndices[i]);
 
 				int newX = -Generator.renderRadius + xChunk + pos.x;
 				int newY = -Generator.renderRadius + yChunk + pos.y;
 				int newZ = -Generator.renderRadius + zChunk + pos.z;
 
-				GameObject shell = Generator.generateEmpty();
-				Generator.chunks[regenerateIndices[i]] = shell;
-				StartCoroutine(Generator.generateAsync(new Vector3(newZ, newY, newX), shell));
+				Vector3Int genPos = new Vector3Int(newZ, newY, newX);
+				//Vector3Int genPosSwapped = new Vector3Int(newX, newY, newZ);
+
+				// Try to find the given cave chunk in the cache, first.
+				if (Generator.chunkCache.ContainsKey(genPos)) {
+					// If we find it, then "generate" that chunk in the cube buffer, and activate it.
+					GameObject cachedGO = Generator.chunkCache[genPos];
+
+					Generator.chunks[regenerateIndices[i]] = cachedGO;
+					cachedGO.SetActive(true);
+				} else {
+					// If we don't find it, then actually regenerate the mesh asyncronously. 
+					GameObject shell = Generator.generateEmpty();
+					Generator.chunks[regenerateIndices[i]] = shell;
+					Generator.chunkCache[genPos] = shell;
+					StartCoroutine(Generator.generateAsync(genPos, shell));
+				}
 			}
 		}
 

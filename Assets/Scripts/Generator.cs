@@ -9,6 +9,7 @@ using MarchingCubesProject;
 public class Generator : MonoBehaviour {
 
 	private static RidgedMultifractal noiseGen;
+	//private static SimplexNoiseGenerator noiseGen;
 
 	public static int size = 8;
 	public static float scale = 16f;
@@ -21,40 +22,55 @@ public class Generator : MonoBehaviour {
 	private static Material defaultMaterial;
 	private static PhysicMaterial defaultPhysics;
 
-	//public static GameObject[,,] chunks;
-	public static CubeBuffer<GameObject> chunks;
-	public static int renderDiameter = 7;
-	public static int renderRadius = renderDiameter / 2;
+	/*
+	 * A 3D array of GameObjects representing the currently loaded cave meshes.
+	 * This gets shifted around and regenerated based on the player movement.
+	 */
+	public static CubeBuffer chunks;
+
+	/**
+	 * A dictionary of cave meshes, sorted by their positions.
+	 */
+	public static Dictionary<Vector3Int, GameObject> chunkCache;
+
+	public static int renderRadius = 3;
+	public static int renderDiameter = (renderRadius * 2) + 1;
 
 	static Generator() {
 		noiseGen = new RidgedMultifractal ();
+		//noiseGen = new SimplexNoiseGenerator("test");
 
 		meshOffset = new Vector3 (size / 2, size / 2, size / 2);
+
+		defaultMaterial = new Material(Resources.Load("Materials/Rock") as Material);
 
 		defaultPhysics = new PhysicMaterial ();
 		defaultPhysics.bounciness = 0.0f;
 		defaultPhysics.dynamicFriction = 1.0f;
 		defaultPhysics.staticFriction = 1.0f;
 
-		//chunks = new GameObject[renderDiameter, renderDiameter, renderDiameter];
-		chunks = new CubeBuffer<GameObject> (renderDiameter);
+		chunkCache = new Dictionary<Vector3Int, GameObject> ();
+
+		chunks = new CubeBuffer (renderDiameter);
 		for (int i = 0; i < renderDiameter * renderDiameter * renderDiameter; i++) {
-			//Vector3 pos = indexToCoords (renderDiameter, i);
-			//chunks [(int)pos.x, (int)pos.y, (int)pos.z] = null;
 			chunks[i] = null;
 		}
-	}
 
-	public static int coordsToIndex(int size, int x, int y, int z) {
-		return (x * size * size) + (y * size) + z;
-	}
-
-	public static Vector3Int indexToCoords(int size, int i) {
-		return new Vector3Int ((int)((float)i / size / size) % size, (int)((float)i / size) % size, i % size);
+		/*
+		if (renderDiameter == 9) {
+			RenderSettings.fogDensity = 0.07f;
+		} else if (renderDiameter == 7) {
+			RenderSettings.fogDensity = 0.10f;
+		} else if (renderDiameter == 5) {
+			RenderSettings.fogDensity = 0.17f;
+		}
+		*/
+		//RenderSettings.fog = true;
+		//RenderSettings.fogDensity = Mathf.Exp (-0.33f * renderDiameter);
 	}
 
 	public static void generate() {
-		noiseGen = new RidgedMultifractal ();
+		//noiseGen = new RidgedMultifractal ();
 		//noiseGen.OctaveCount = 10;
 
 		//int count = 3;
@@ -62,8 +78,11 @@ public class Generator : MonoBehaviour {
 		for (int i = -renderRadius; i <= renderRadius; i++) {
 			for (int j = -renderRadius; j <= renderRadius; j++) {
 				for (int k = -renderRadius; k <= renderRadius; k++) {
-					chunks[k + renderRadius, j + renderRadius, i + renderRadius] = generateObj (new Vector3 (i, j, k));
-					chunks[k + renderRadius, j + renderRadius, i + renderRadius].name = "(" + (i + renderRadius) + ", " + (j + renderRadius) + ", " + (k + renderRadius) + ")";
+					GameObject newObj = generateObj (new Vector3 (i, j, k));
+
+					chunks [k + renderRadius, j + renderRadius, i + renderRadius] = newObj;
+					newObj.name = "(" + (i + renderRadius) + ", " + (j + renderRadius) + ", " + (k + renderRadius) + ")";
+					chunkCache [new Vector3Int (i, j, k)] = newObj;
 				}
 			}
 		}
@@ -100,7 +119,7 @@ public class Generator : MonoBehaviour {
 		for (int i = 0; i < sp1; i++) {
 			for (int j = 0; j < sp1; j++) {
 				for (int k = 0; k < sp1; k++) {
-					data [coordsToIndex (sp1, i, j, k)] = (float) -noiseGen.GetValue(
+					data [Helper.coordsToIndex (sp1, i, j, k)] = (float) -noiseGen.GetValue(
 						offset.x + (i / scale), offset.y + (j / scale), offset.z + (k / scale));
 				}
 			}
@@ -176,13 +195,22 @@ public class Generator : MonoBehaviour {
 		Mesh mesh = new Mesh ();
 		mesh.vertices = vertices;
 		mesh.triangles = triangles;
+
+		Vector2[] uvs = new Vector2[vertices.Length];
+		for (int i = 0; i < uvs.Length; i += 3) {
+			uvs [i + 0] = new Vector2(0, 0);
+			uvs [i + 1] = new Vector2(1, 0);
+			uvs [i + 2] = new Vector2(1, 1);
+		}
+		mesh.uv = uvs;
+		
 		mesh.RecalculateNormals ();
 
 		if (unfinishedObj == null) { return; }
 		unfinishedObj.GetComponent<MeshFilter> ().mesh = mesh;
 
 		if (unfinishedObj == null) { return; }
-		unfinishedObj.GetComponent<MeshRenderer> ().material = new Material(Shader.Find("Diffuse"));
+		unfinishedObj.GetComponent<MeshRenderer> ().material = defaultMaterial;
 
 		if (unfinishedObj == null) { return; }
 		unfinishedObj.GetComponent<MeshCollider>().sharedMesh = mesh; 
@@ -207,7 +235,7 @@ public class Generator : MonoBehaviour {
 		for (int i = 0; i < sp1; i++) {
 			for (int j = 0; j < sp1; j++) {
 				for (int k = 0; k < sp1; k++) {
-					data [coordsToIndex (sp1, i, j, k)] = (float) -noiseGen.GetValue(
+					data [Helper.coordsToIndex (sp1, i, j, k)] = (float) -noiseGen.GetValue(
 						offset.x + (i / scale), offset.y + (j / scale), offset.z + (k / scale));
 				}
 			}
@@ -240,7 +268,7 @@ public class Generator : MonoBehaviour {
 		newObj.AddComponent<MeshRenderer> ();
 		newObj.AddComponent<MeshCollider> ();
 
-		newObj.GetComponent<MeshRenderer> ().material = new Material(Shader.Find("Diffuse"));
+		newObj.GetComponent<MeshRenderer> ().material = defaultMaterial;
 		return newObj;
 	}
 

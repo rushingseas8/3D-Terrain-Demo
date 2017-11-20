@@ -92,8 +92,11 @@
      <Compile Include="Assets\MarchingCubes\Marching\MarchingTertahedron.cs" />
      <Compile Include="Assets\Scripts\Controller.cs" />
      <Compile Include="Assets\Scripts\CubeBuffer.cs" />
+     <Compile Include="Assets\Scripts\CubeStorage.cs" />
      <Compile Include="Assets\Scripts\GameManager.cs" />
      <Compile Include="Assets\Scripts\Generator.cs" />
+     <Compile Include="Assets\Scripts\Helper.cs" />
+     <Compile Include="Assets\SimplexNoise\SimplexNoise.cs" />
  <Reference Include="UnityEngine.UI">
  <HintPath>/Applications/Unity/Unity.app/Contents/UnityExtensions/Unity/GUISystem/UnityEngine.UI.dll</HintPath>
  </Reference>
