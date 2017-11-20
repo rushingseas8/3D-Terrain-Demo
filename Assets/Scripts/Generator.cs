@@ -21,8 +21,9 @@ public class Generator : MonoBehaviour {
 	private static Material defaultMaterial;
 	private static PhysicMaterial defaultPhysics;
 
-	public static GameObject[,,] chunks;
-	public static int renderDiameter = 3;
+	//public static GameObject[,,] chunks;
+	public static CubeBuffer<GameObject> chunks;
+	public static int renderDiameter = 7;
 	public static int renderRadius = renderDiameter / 2;
 
 	static Generator() {
@@ -35,10 +36,12 @@ public class Generator : MonoBehaviour {
 		defaultPhysics.dynamicFriction = 1.0f;
 		defaultPhysics.staticFriction = 1.0f;
 
-		chunks = new GameObject[renderDiameter, renderDiameter, renderDiameter];
+		//chunks = new GameObject[renderDiameter, renderDiameter, renderDiameter];
+		chunks = new CubeBuffer<GameObject> (renderDiameter);
 		for (int i = 0; i < renderDiameter * renderDiameter * renderDiameter; i++) {
-			Vector3 pos = indexToCoords (renderDiameter, i);
-			chunks [(int)pos.x, (int)pos.y, (int)pos.z] = null;
+			//Vector3 pos = indexToCoords (renderDiameter, i);
+			//chunks [(int)pos.x, (int)pos.y, (int)pos.z] = null;
+			chunks[i] = null;
 		}
 	}
 
@@ -46,8 +49,8 @@ public class Generator : MonoBehaviour {
 		return (x * size * size) + (y * size) + z;
 	}
 
-	public static Vector3 indexToCoords(int size, int i) {
-		return new Vector3 ((i / size / size) % size, (i / size) % size, i % size);
+	public static Vector3Int indexToCoords(int size, int i) {
+		return new Vector3Int ((int)((float)i / size / size) % size, (int)((float)i / size) % size, i % size);
 	}
 
 	public static void generate() {
@@ -59,7 +62,8 @@ public class Generator : MonoBehaviour {
 		for (int i = -renderRadius; i <= renderRadius; i++) {
 			for (int j = -renderRadius; j <= renderRadius; j++) {
 				for (int k = -renderRadius; k <= renderRadius; k++) {
-					chunks[i + renderRadius, j + renderRadius, k + renderRadius] = generateObj (new Vector3 (k, j, i));
+					chunks[k + renderRadius, j + renderRadius, i + renderRadius] = generateObj (new Vector3 (i, j, k));
+					chunks[k + renderRadius, j + renderRadius, i + renderRadius].name = "(" + (i + renderRadius) + ", " + (j + renderRadius) + ", " + (k + renderRadius) + ")";
 				}
 			}
 		}
@@ -127,6 +131,7 @@ public class Generator : MonoBehaviour {
 		GameObject newObj = generateEmpty ();
 		assignMesh (newObj, verts.ToArray (), tris.ToArray ());
 		newObj.transform.position = new Vector3(position.z * size, position.y * size, position.x * size) - meshOffset;
+		newObj.name = "(" + position.x + " ," + position.y + " ," + position.z + ")";
 
 		//newObj.transform.localScale = new Vector3 (resolution, resolution, resolution);
 
@@ -185,6 +190,12 @@ public class Generator : MonoBehaviour {
 
 	public static IEnumerator generateAsync(Vector3 position, GameObject unfinishedObj, bool doubleSided=false) {
 		
+		if (unfinishedObj != null) {
+			unfinishedObj.transform.position = new Vector3 (position.z * size, position.y * size, position.x * size) - meshOffset;
+			//unfinishedObj.name = "(" + position.x + " ," + position.y + " ," + position.z + ")";
+		}
+		yield return null;
+
 		#region Create data
 
 		int sp1 = size + 1;
@@ -220,10 +231,6 @@ public class Generator : MonoBehaviour {
 
 		assignMesh (unfinishedObj, verts.ToArray (), tris.ToArray ());
 		yield return null;
-
-		if (unfinishedObj != null) {
-			unfinishedObj.transform.position = new Vector3 (position.z * size, position.y * size, position.x * size) - meshOffset;
-		}
 	}
 
 	public static GameObject generateEmpty() {
@@ -237,136 +244,9 @@ public class Generator : MonoBehaviour {
 		return newObj;
 	}
 
-	public static void shiftArray(int x, int y, int z) {
-		Debug.Log("Shift array called "  + x + ", " + y + ", " + z);
-
-		// Moving left
-		if (x < 0) {
-			for (int i = 0; i < renderDiameter; i++) {
-				for (int j = 0; j < renderDiameter; j++) {
-					for (int k = renderDiameter + x; k < renderDiameter; k++) {
-						GameObject.Destroy (chunks [i, j, k]);
-						chunks [i, j, k] = null;
-					}
-				}
-			}
-
-			for (int i = 0; i < renderDiameter; i++) {
-				for (int j = 0; j < renderDiameter; j++) {
-					for (int k = renderDiameter - 1 + x; k >= 0; k--) {
-						chunks [i, j, k - x] = chunks [i, j, k];
-					}
-				}
-			}
-
-			// Now chunks[0, i, j] can be set to null; they carry what is now in chunks[1, i, j].
-		}
-
-		// Moving right
-		/*
-		if (x > 0) {
-			for (int i = 0; i < x; i++) {
-				for (int j = 0; j < renderDiameter; j++) {
-					for (int k = 0; k < renderDiameter; k++) {
-						GameObject.Destroy (chunks [i, j, k]);
-						chunks [i, j, k] = null;
-					}
-				}
-			}
-
-			for (int i = 0; i < renderDiameter - x; i++) {
-				for (int j = 0; j < renderDiameter; j++) {
-					for (int k = 0; k < renderDiameter; k++) {
-						chunks [i, j, k] = chunks [i + x, j, k];
-					}
-				}
-			}
-		}
-		*/
-		// Moving down
-		if (y < 0) {
-			for (int i = 0; i < renderDiameter; i++) {
-				for (int j = renderDiameter + y; j < renderDiameter; j++) {
-					for (int k = 0; k < renderDiameter; k++) {
-						GameObject.Destroy (chunks [i, j, k]);
-						chunks [i, j, k] = null;
-					}
-				}
-			}
-
-			for (int i = 0; i < renderDiameter; i++) {
-				for (int j = renderDiameter - 1 + y; j >= 0; j--) {
-					for (int k = 0; k < renderDiameter; k++) {
-						chunks [i, j - y, k] = chunks [i, j, k];
-					}
-				}
-			}
-
-			// Now chunks[0, i, j] can be set to null; they carry what is now in chunks[1, i, j].
-		}
-
-		#region Moving up
-		if (y > 0) {
-			for (int i = 0; i < renderDiameter; i++) {
-				for (int j = 0; j < y; j++) {
-					for (int k = 0; k < renderDiameter; k++) {
-						GameObject.Destroy (chunks [i, j, k]);
-						chunks [i, j, k] = null;
-					}
-				}
-			}
-
-			for (int i = 0; i < renderDiameter; i++) {
-				for (int j = 0; j < renderDiameter - y; j++) {
-					for (int k = 0; k < renderDiameter; k++) {
-						chunks [i, j, k] = chunks [i, j + y, k];
-					}
-				}
-			}
-		}
-		#endregion
-
-		// Moving backward
-		if (z < 0) {
-			for (int i = 0; i < renderDiameter; i++) {
-				for (int j = 0; j < renderDiameter; j++) {
-					for (int k = renderDiameter + z; k < renderDiameter; k++) {
-						GameObject.Destroy (chunks [i, j, k]);
-						chunks [i, j, k] = null;
-					}
-				}
-			}
-
-			for (int i = 0; i < renderDiameter; i++) {
-				for (int j = 0; j < renderDiameter; j++) {
-					for (int k = renderDiameter - 1 + z; k >= 0; k--) {
-						chunks [i, j, k - z] = chunks [i, j, k];
-					}
-				}
-			}
-
-			// Now chunks[0, i, j] can be set to null; they carry what is now in chunks[1, i, j].
-		}
-
-		// Moving forward
-		if (z > 0) {
-			for (int i = 0; i < renderDiameter; i++) {
-				for (int j = 0; j < renderDiameter; j++) {
-					for (int k = 0; k < z; k++) {
-						GameObject.Destroy (chunks [i, j, k]);
-						chunks [i, j, k] = null;
-					}
-				}
-			}
-
-			for (int i = 0; i < renderDiameter; i++) {
-				for (int j = 0; j < renderDiameter; j++) {
-					for (int k = 0; k < renderDiameter - z; k++) {
-						chunks [i, j, k] = chunks [i, j, k + z];
-					}
-				}
-			}
-		}
+	public static void shiftArray(Direction dir) {
+		//Debug.Log("Shift array called "  + x + ", " + y + ", " + z);
+		chunks.shift (dir);
 	}
 
 	void Start() {

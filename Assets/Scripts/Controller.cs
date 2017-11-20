@@ -191,114 +191,47 @@ public class Controller : MonoBehaviour {
 		//int newYChunk = (int)(transform.position.y / 1);
 		//int newZChunk = (int)(transform.position.x / 1);
 
-		int newXChunk = (int)(transform.position.z / Generator.size);
+		int newXChunk = (int)(transform.position.x / Generator.size);
 		int newYChunk = (int)(transform.position.y / Generator.size);
-		int newZChunk = (int)(transform.position.x / Generator.size);
+		int newZChunk = (int)(transform.position.z / Generator.size);
 
-		if (newZChunk < zChunk) {
-			zChunk = newZChunk;
-			Generator.shiftArray(-1, 0, 0);
-			for (int i = 0; i < Generator.renderDiameter; i++) {
-				for (int j = 0; j < Generator.renderDiameter; j++) {
-					int newX = -Generator.renderRadius + xChunk + i;
-					int newY = -Generator.renderRadius + yChunk + j;
-					int newZ = -Generator.renderRadius + zChunk;
-
-					Vector3 position = new Vector3(newX, newY, newZ);
-					GameObject shell = Generator.generateEmpty();
-					Generator.chunks[0, i, j] = shell;
-					StartCoroutine(Generator.generateAsync(position, shell));
-
-					//GameObject newObj = GameObject.CreatePrimitive(PrimitiveType.Cube);
-					//newObj.transform.position = position;
-					//Generator.chunks[Generator.renderDiameter - 1, i, j] = newObj;
-				}
-			}
-
-		} else if (newZChunk > zChunk) {
-			zChunk = newZChunk;
-			Generator.shiftArray(1, 0, 0);			
-			for (int i = 0; i < Generator.renderDiameter; i++) {
-				for (int j = 0; j < Generator.renderDiameter; j++) {
-					int newX = -Generator.renderRadius + xChunk + i;
-					int newY = -Generator.renderRadius + yChunk + j;
-					int newZ = Generator.renderRadius + zChunk;
-
-					Vector3 position = new Vector3(newX, newY, newZ);
-					GameObject shell = Generator.generateEmpty();
-					Generator.chunks[Generator.renderDiameter - 1, i, j] = shell;
-					StartCoroutine(Generator.generateAsync(position, shell));
-				}
-			}
+		Direction movementDir = Direction.NONE;
+	
+		if (newXChunk < xChunk) {		
+			xChunk = newXChunk;
+			movementDir = Direction.LEFT;
+		} else if (newXChunk > xChunk) {
+			xChunk = newXChunk;
+			movementDir = Direction.RIGHT;
 		} else if (newYChunk < yChunk) {
 			yChunk = newYChunk;
-			Generator.shiftArray(0, -1, 0);
-			for (int i = 0; i < Generator.renderDiameter; i++) {
-				for (int j = 0; j < Generator.renderDiameter; j++) {
-					int newX = -Generator.renderRadius + xChunk + i;
-					int newY = -Generator.renderRadius + yChunk;
-					int newZ = -Generator.renderRadius + zChunk + j; 
-
-					Vector3 position = new Vector3(newX, newY, newZ);
-					GameObject shell = Generator.generateEmpty();
-					Generator.chunks[i, 0, j] = shell;
-					StartCoroutine(Generator.generateAsync(position, shell));
-				}
-			}
+			movementDir = Direction.DOWN;
 		} else if (newYChunk > yChunk) {
 			yChunk = newYChunk;
-			Generator.shiftArray(0, 1, 0);
-			for (int i = 0; i < Generator.renderDiameter; i++) {
-				for (int j = 0; j < Generator.renderDiameter; j++) {
-					int newX = -Generator.renderRadius + xChunk + i;
-					int newY = Generator.renderRadius + yChunk;
-					int newZ = -Generator.renderRadius + zChunk + j; 
-
-					Vector3 position = new Vector3(newX, newY, newZ);
-					GameObject shell = Generator.generateEmpty();
-					Generator.chunks[i, Generator.renderDiameter - 1, j] = shell;
-					StartCoroutine(Generator.generateAsync(position, shell));
-				}
-			}
+			movementDir = Direction.UP;
+		} else if (newZChunk < zChunk) {
+			zChunk = newZChunk;
+			movementDir = Direction.BACK;
+		} else if (newZChunk > zChunk) {
+			zChunk = newZChunk;
+			movementDir = Direction.FRONT;
 		}
 
-		/*
-		if (newXChunk < xChunk) {
-			xChunk = newXChunk;
-			Generator.shiftArray(0, 0, -1);
-			for (int i = 0; i < Generator.renderDiameter; i++) {
-				for (int j = 0; j < Generator.renderDiameter; j++) {
-					int newX = -Generator.renderRadius + xChunk;
-					int newY = -Generator.renderRadius + yChunk + i;
-					int newZ = -Generator.renderRadius + zChunk + j; 
+		if (movementDir != Direction.NONE) {
+			Generator.shiftArray(movementDir);
+			int[] regenerateIndices = CubeBuffer<GameObject>.faceIndices[(int)movementDir];
+			for (int i = 0; i < regenerateIndices.Length; i++) {
+				Vector3Int pos = Generator.indexToCoords(Generator.renderDiameter, regenerateIndices[i]);
 
-					Vector3 position = new Vector3(newX, newY, newZ);
-					GameObject shell = Generator.generateEmpty();
-					Generator.chunks[i, 0, j] = shell;
-					StartCoroutine(Generator.generateAsync(position, shell));
-				}
-			}
-		} 
-		*/
+				int newX = -Generator.renderRadius + xChunk + pos.x;
+				int newY = -Generator.renderRadius + yChunk + pos.y;
+				int newZ = -Generator.renderRadius + zChunk + pos.z;
 
-		/*
-		if (newXChunk > xChunk) {
-			xChunk = newXChunk;
-			Generator.shiftArray(0, 0, 1);
-			for (int i = 0; i < Generator.renderDiameter; i++) {
-				for (int j = 0; j < Generator.renderDiameter; j++) {
-					int newX = Generator.renderRadius + xChunk;
-					int newY = -Generator.renderRadius + yChunk + i;
-					int newZ = -Generator.renderRadius + zChunk + j; 
-
-					Vector3 position = new Vector3(newX, newY, newZ);
-					GameObject shell = Generator.generateEmpty();
-					Generator.chunks[i, Generator.renderDiameter - 1, j] = shell;
-					StartCoroutine(Generator.generateAsync(position, shell));
-				}
+				GameObject shell = Generator.generateEmpty();
+				Generator.chunks[regenerateIndices[i]] = shell;
+				StartCoroutine(Generator.generateAsync(new Vector3(newZ, newY, newX), shell));
 			}
 		}
-		*/
 
 		#endregion
 	}
