@@ -18,7 +18,7 @@ public class Controller : MonoBehaviour {
 	public float thirdPersonDistance = 10.0f;
 	public float jumpVelocity = 5.0f;
 
-	public static bool flyingMode = false;
+	public static bool flyingMode = true;
     public static bool cameraKeyLock = true;
 
 	private float movementScale = 6f;
@@ -49,6 +49,10 @@ public class Controller : MonoBehaviour {
 			movementScale = 2.5f;
 		else
 			movementScale = 0.2f;*/
+		
+		if (flyingMode) {
+			GetComponent<Rigidbody> ().useGravity = false;
+		}
 	}
 
 	bool keycodePressed(KeyCode[] arr) {
@@ -71,17 +75,23 @@ public class Controller : MonoBehaviour {
 
 	// Update is called once per frame
 	void Update () {
-		Vector3 oldPosition = this.gameObject.transform.position;
+		//Vector3 oldPosition = this.gameObject.transform.position;
 		Quaternion oldRotation = mainCamera.transform.rotation;
 
-		Vector3 newPosition = oldPosition;
+		//Vector3 newPosition = oldPosition;
 		Quaternion newRotation = oldRotation;
+
+		Rigidbody body = GetComponent<Rigidbody> ();
+
+		if (flyingMode) {
+			body.velocity = Vector3.zero;
+		}
 
 		Quaternion angle = Quaternion.AngleAxis (mainCamera.transform.rotation.eulerAngles.y, Vector3.up);
 		float newMovementScale = movementScale;
 		bool onGround = false;
 
-		if (Physics.Raycast (oldPosition, Vector3.down, 3.0f)) {
+		if (Physics.Raycast (transform.position, Vector3.down, 3.0f)) {
 			onGround = true;
 		}
 
@@ -96,39 +106,7 @@ public class Controller : MonoBehaviour {
             newMovementScale *= 0.5f;
         }
 
-		/*
-		if (keycodePressed (forward)) {
-			newPosition += (angle * Vector3.forward * newMovementScale);
-		}
-		if (keycodePressed (backward)) {
-			newPosition += (angle * Vector3.back * newMovementScale);
-		}
-		if (keycodePressed (left)) {
-			newPosition += (angle * Vector3.left * newMovementScale);
-		}
-		if (keycodePressed (right)) {
-			newPosition += (angle * Vector3.right * newMovementScale);
-		}
-		*/
-		/*
-		if (keycodePressed (forward)) {
-			GetComponent<Rigidbody> ().AddForce (angle * Vector3.forward * newMovementScale);
-		}
-		if (keycodePressed (backward)) {
-			GetComponent<Rigidbody> ().AddForce (angle * Vector3.back * newMovementScale);
-		}
-		if (keycodePressed (left)) {
-			GetComponent<Rigidbody> ().AddForce (angle * Vector3.left * newMovementScale);
-		}
-		if (keycodePressed (right)) {
-			GetComponent<Rigidbody> ().AddForce (angle * Vector3.right * newMovementScale);
-		}
-		*/
-
-		//GetComponent<Rigidbody> ().AddForce (new Vector3(Input.GetAxis("Horizontal"), 0, Input.GetAxis("Vertical")) * movementScale);
-		float oldYVelocity = GetComponent<Rigidbody> ().velocity.y;
-		Vector3 newVelocity = angle * new Vector3 (Input.GetAxis ("Horizontal"), 0.0f, Input.GetAxis ("Vertical")) * movementScale;
-		GetComponent<Rigidbody> ().velocity = new Vector3 (newVelocity.x, oldYVelocity, newVelocity.z);
+		Vector3 velocity = angle * new Vector3 (Input.GetAxis ("Horizontal"), 0.0f, Input.GetAxis ("Vertical")) * movementScale;
 
         if (cameraKeyLock) {
             Cursor.lockState = CursorLockMode.Locked;
@@ -140,21 +118,26 @@ public class Controller : MonoBehaviour {
 
 		if (flyingMode) {
 			if (keycodePressed (up)) {
-				newPosition += (Vector3.up * movementScale);
+				//newPosition += (Vector3.up * movementScale);
+				velocity.y = movementScale;
 			}
 			if (keycodePressed (down)) {
-				newPosition += (Vector3.down * movementScale);
+				//newPosition += (Vector3.down * movementScale);
+				velocity.y = -movementScale;
 			}
 		} else {
 			//Only jump if we're on the ground (or very close)
 			if (keycodeDown (up)) {	
 				if (onGround) {
 					//this.gameObject.GetComponent<Rigidbody> ().velocity = new Vector3 (0, jumpVelocity, 0);
-					Vector3 oldVelocity = GetComponent<Rigidbody> ().velocity;
-					GetComponent<Rigidbody> ().velocity = new Vector3 (oldVelocity.x, jumpVelocity, oldVelocity.z);
+					//Vector3 oldVelocity = GetComponent<Rigidbody> ().velocity;
+					//GetComponent<Rigidbody> ().velocity = new Vector3 (oldVelocity.x, jumpVelocity, oldVelocity.z);
+					velocity.y = jumpVelocity;
 				}
 			}
 		}
+
+		body.velocity = velocity;
 
 		float mouseX = Input.GetAxis ("Mouse X");
 		float mouseY = -Input.GetAxis ("Mouse Y");
@@ -191,15 +174,132 @@ public class Controller : MonoBehaviour {
 				0));
 		}
 			
-		Debug.Log (thirdPersonDistance);
+		//Debug.Log (thirdPersonDistance);
 		thirdPersonDistance -= Input.GetAxis ("Mouse ScrollWheel");
 		if (thirdPersonDistance < 0)
 			thirdPersonDistance = 0;
 
-		this.gameObject.transform.position = newPosition;
+		//this.gameObject.transform.position = newPosition;
 		this.gameObject.transform.rotation = angle;
 
-		mainCamera.transform.position = newPosition + (newRotation * new Vector3 (0, 0, -thirdPersonDistance));
+		mainCamera.transform.position = transform.position + (newRotation * new Vector3 (0, 0, -thirdPersonDistance));
 		mainCamera.transform.rotation = newRotation;
-    }
+
+		#region Generate Terrain
+
+		//int newXChunk = (int)(transform.position.z / 1);
+		//int newYChunk = (int)(transform.position.y / 1);
+		//int newZChunk = (int)(transform.position.x / 1);
+
+		int newXChunk = (int)(transform.position.z / Generator.size);
+		int newYChunk = (int)(transform.position.y / Generator.size);
+		int newZChunk = (int)(transform.position.x / Generator.size);
+
+		if (newZChunk < zChunk) {
+			zChunk = newZChunk;
+			Generator.shiftArray(-1, 0, 0);
+			for (int i = 0; i < Generator.renderDiameter; i++) {
+				for (int j = 0; j < Generator.renderDiameter; j++) {
+					int newX = -Generator.renderRadius + xChunk + i;
+					int newY = -Generator.renderRadius + yChunk + j;
+					int newZ = -Generator.renderRadius + zChunk;
+
+					Vector3 position = new Vector3(newX, newY, newZ);
+					GameObject shell = Generator.generateEmpty();
+					Generator.chunks[0, i, j] = shell;
+					StartCoroutine(Generator.generateAsync(position, shell));
+
+					//GameObject newObj = GameObject.CreatePrimitive(PrimitiveType.Cube);
+					//newObj.transform.position = position;
+					//Generator.chunks[Generator.renderDiameter - 1, i, j] = newObj;
+				}
+			}
+
+		} else if (newZChunk > zChunk) {
+			zChunk = newZChunk;
+			Generator.shiftArray(1, 0, 0);			
+			for (int i = 0; i < Generator.renderDiameter; i++) {
+				for (int j = 0; j < Generator.renderDiameter; j++) {
+					int newX = -Generator.renderRadius + xChunk + i;
+					int newY = -Generator.renderRadius + yChunk + j;
+					int newZ = Generator.renderRadius + zChunk;
+
+					Vector3 position = new Vector3(newX, newY, newZ);
+					GameObject shell = Generator.generateEmpty();
+					Generator.chunks[Generator.renderDiameter - 1, i, j] = shell;
+					StartCoroutine(Generator.generateAsync(position, shell));
+				}
+			}
+		} else if (newYChunk < yChunk) {
+			yChunk = newYChunk;
+			Generator.shiftArray(0, -1, 0);
+			for (int i = 0; i < Generator.renderDiameter; i++) {
+				for (int j = 0; j < Generator.renderDiameter; j++) {
+					int newX = -Generator.renderRadius + xChunk + i;
+					int newY = -Generator.renderRadius + yChunk;
+					int newZ = -Generator.renderRadius + zChunk + j; 
+
+					Vector3 position = new Vector3(newX, newY, newZ);
+					GameObject shell = Generator.generateEmpty();
+					Generator.chunks[i, 0, j] = shell;
+					StartCoroutine(Generator.generateAsync(position, shell));
+				}
+			}
+		} else if (newYChunk > yChunk) {
+			yChunk = newYChunk;
+			Generator.shiftArray(0, 1, 0);
+			for (int i = 0; i < Generator.renderDiameter; i++) {
+				for (int j = 0; j < Generator.renderDiameter; j++) {
+					int newX = -Generator.renderRadius + xChunk + i;
+					int newY = Generator.renderRadius + yChunk;
+					int newZ = -Generator.renderRadius + zChunk + j; 
+
+					Vector3 position = new Vector3(newX, newY, newZ);
+					GameObject shell = Generator.generateEmpty();
+					Generator.chunks[i, Generator.renderDiameter - 1, j] = shell;
+					StartCoroutine(Generator.generateAsync(position, shell));
+				}
+			}
+		}
+
+		/*
+		if (newXChunk < xChunk) {
+			xChunk = newXChunk;
+			Generator.shiftArray(0, 0, -1);
+			for (int i = 0; i < Generator.renderDiameter; i++) {
+				for (int j = 0; j < Generator.renderDiameter; j++) {
+					int newX = -Generator.renderRadius + xChunk;
+					int newY = -Generator.renderRadius + yChunk + i;
+					int newZ = -Generator.renderRadius + zChunk + j; 
+
+					Vector3 position = new Vector3(newX, newY, newZ);
+					GameObject shell = Generator.generateEmpty();
+					Generator.chunks[i, 0, j] = shell;
+					StartCoroutine(Generator.generateAsync(position, shell));
+				}
+			}
+		} 
+		*/
+
+		/*
+		if (newXChunk > xChunk) {
+			xChunk = newXChunk;
+			Generator.shiftArray(0, 0, 1);
+			for (int i = 0; i < Generator.renderDiameter; i++) {
+				for (int j = 0; j < Generator.renderDiameter; j++) {
+					int newX = Generator.renderRadius + xChunk;
+					int newY = -Generator.renderRadius + yChunk + i;
+					int newZ = -Generator.renderRadius + zChunk + j; 
+
+					Vector3 position = new Vector3(newX, newY, newZ);
+					GameObject shell = Generator.generateEmpty();
+					Generator.chunks[i, Generator.renderDiameter - 1, j] = shell;
+					StartCoroutine(Generator.generateAsync(position, shell));
+				}
+			}
+		}
+		*/
+
+		#endregion
+	}
 }
