@@ -14,7 +14,7 @@ public class Generator : MonoBehaviour {
 	//private static RidgedMultifractal noiseGen;
 	//private static SimplexNoiseGenerator noiseGen;
 
-	public static int size = 8;
+	public static int size = 4;
 	public static float scale = 16f;
 	//public static float[] data;
 
@@ -36,7 +36,7 @@ public class Generator : MonoBehaviour {
 	 */
 	public static Dictionary<Vector3Int, GameObject> chunkCache;
 
-	public static int renderRadius = 3;
+	public static int renderRadius = 6;
 	public static int renderDiameter = (renderRadius * 2) + 1;
 
 	// We use the custom C code for extra speed
@@ -45,6 +45,13 @@ public class Generator : MonoBehaviour {
 
 	//[DllImport ("FastPerlin")]
 	//private static extern void GetValue_All (double[,,] data, double x, double y, double z, double step);
+
+	// To help the garbage collector, we provide a default size for the vertex array.
+	// Too small means resizing (slow!) and too big means a lot to clean up (slow!)
+	private const int DEFAULT_VERTEX_BUFFER_SIZE = 1800;	// Minimum found to be 1700; adding some room for error.
+	private const int DEFAULT_TRI_BUFFER_SIZE = 1750;		// Minimum 1650.
+
+	private static Vector3 GEN_OFFSET = new Vector3 (1023, 1942, 7777);
 
 	static Generator() {
 		//noiseGen = new RidgedMultifractal ();
@@ -76,7 +83,9 @@ public class Generator : MonoBehaviour {
 			RenderSettings.fogDensity = 0.17f;
 		}
 		*/
-		//RenderSettings.fog = true;
+		RenderSettings.fog = true;
+		RenderSettings.fogDensity = 0.10f;
+
 		//RenderSettings.fogDensity = Mathf.Exp (-0.33f * renderDiameter);
 	}
 
@@ -123,17 +132,20 @@ public class Generator : MonoBehaviour {
 		// world coords, using "size" (# points per mesh per axis) over "scale" (perlin offset).
 		// When size == scale, offsetScale == 1, so world coords == chunk coords.
 		float offsetScale = size / scale;
-		Vector3 offset = position * offsetScale;
+		Vector3 offset = GEN_OFFSET + position * offsetScale;
 
 		// We negate the value because the inverse looks better for RidgedMultifractal. 
 		// Switch to positive for Perlin noise.
+		int count = 0;
 		for (int i = 0; i < sp1; i++) {
 			for (int j = 0; j < sp1; j++) {
 				for (int k = 0; k < sp1; k++) {
 					//data [Helper.coordsToIndex (sp1, i, j, k)] = (float) -noiseGen.GetValue(
 					//	offset.x + (i / scale), offset.y + (j / scale), offset.z + (k / scale));
 
-					data [Helper.coordsToIndex (sp1, i, j, k)] = (float) -GetValue(
+					//(x * size * size) + (y * size) + z
+
+					data [count++] = (float) -GetValue(
 						offset.x + (i / scale), offset.y + (j / scale), offset.z + (k / scale));
 				}
 			}
@@ -170,9 +182,8 @@ public class Generator : MonoBehaviour {
 		float[] data = generateData (size, position);
 		Profiler.EndSample ();
 
-		List<Vector3> verts = new List<Vector3> ();
-		List<int> tris = new List<int> ();
-
+		List<Vector3> verts = new List<Vector3> (DEFAULT_VERTEX_BUFFER_SIZE); 
+		List<int> tris = new List<int> (DEFAULT_TRI_BUFFER_SIZE);
 
 		Profiler.BeginSample("Marching cubes");
 		Marching marching = new MarchingCubes ();
@@ -266,13 +277,14 @@ public class Generator : MonoBehaviour {
 		int sp1 = size + 1;
 		float[] data = new float[sp1 * sp1 * sp1];
 		float offsetScale = size / scale;
-		Vector3 offset = position * offsetScale;
+		Vector3 offset = GEN_OFFSET + position * offsetScale;
 
 		// The yield return is placed there to best optimize runtime.
+		int count = 0;
 		for (int i = 0; i < sp1; i++) {
 			for (int j = 0; j < sp1; j++) {
 				for (int k = 0; k < sp1; k++) {
-					data [Helper.coordsToIndex (sp1, i, j, k)] = (float) -GetValue(
+					data [count++] = (float) -GetValue(
 						offset.x + (i / scale), offset.y + (j / scale), offset.z + (k / scale));
 				}
 			}
@@ -283,8 +295,8 @@ public class Generator : MonoBehaviour {
 
 		#region Perform Marching Cubes
 
-		List<Vector3> verts = new List<Vector3> ();
-		List<int> tris = new List<int> ();
+		List<Vector3> verts = new List<Vector3> (DEFAULT_VERTEX_BUFFER_SIZE); 
+		List<int> tris = new List<int> (DEFAULT_TRI_BUFFER_SIZE);
 
 		Marching marching = new MarchingCubes ();
 		marching.Surface = 0f;

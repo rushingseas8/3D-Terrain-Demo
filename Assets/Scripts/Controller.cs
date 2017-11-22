@@ -15,18 +15,22 @@ public class Controller : MonoBehaviour {
 
 	public Camera mainCamera;
 
+	private static float xRot = 0;
+	private static float yRot = 0;
+
 	public float thirdPersonDistance = 10.0f;
 	public float jumpVelocity = 5.0f;
 
-	public static bool flyingMode = true;
+	public static bool flyingMode = false;
     public static bool cameraKeyLock = true;
 
-	private float movementScale = 6f;
+	private float movementScale = 3f;
 	private float rotationScale = 5f;
 
 	private static int xChunk = 0;
 	private static int yChunk = 0;
 	private static int zChunk = 0;
+
 
 	// Use this for initialization
 	void Start () {
@@ -52,6 +56,8 @@ public class Controller : MonoBehaviour {
 		
 		if (flyingMode) {
 			GetComponent<Rigidbody> ().useGravity = false;
+			Destroy (GetComponent<CapsuleCollider> ());
+			movementScale = 10f;
 		}
 	}
 
@@ -75,19 +81,19 @@ public class Controller : MonoBehaviour {
 
 	// Update is called once per frame
 	void Update () {
-		//Vector3 oldPosition = this.gameObject.transform.position;
 		Quaternion oldRotation = mainCamera.transform.rotation;
-
-		//Vector3 newPosition = oldPosition;
 		Quaternion newRotation = oldRotation;
 
 		Rigidbody body = GetComponent<Rigidbody> ();
 
+		// If we are flying, then ignore gravity and stop moving when no keys are pressed.
 		if (flyingMode) {
 			body.velocity = Vector3.zero;
 		}
 
+		// The angle we are facing, constrained to ignore the up/down axis.
 		Quaternion angle = Quaternion.AngleAxis (mainCamera.transform.rotation.eulerAngles.y, Vector3.up);
+		this.gameObject.transform.rotation = angle;
 		float newMovementScale = movementScale;
 		bool onGround = false;
 
@@ -106,7 +112,9 @@ public class Controller : MonoBehaviour {
             newMovementScale *= 0.5f;
         }
 
+		float oldYVelocity = body.velocity.y;
 		Vector3 velocity = angle * new Vector3 (Input.GetAxis ("Horizontal"), 0.0f, Input.GetAxis ("Vertical")) * movementScale;
+		velocity.y = oldYVelocity;
 
         if (cameraKeyLock) {
             Cursor.lockState = CursorLockMode.Locked;
@@ -129,9 +137,6 @@ public class Controller : MonoBehaviour {
 			//Only jump if we're on the ground (or very close)
 			if (keycodeDown (up)) {	
 				if (onGround) {
-					//this.gameObject.GetComponent<Rigidbody> ().velocity = new Vector3 (0, jumpVelocity, 0);
-					//Vector3 oldVelocity = GetComponent<Rigidbody> ().velocity;
-					//GetComponent<Rigidbody> ().velocity = new Vector3 (oldVelocity.x, jumpVelocity, oldVelocity.z);
 					velocity.y = jumpVelocity;
 				}
 			}
@@ -139,48 +144,25 @@ public class Controller : MonoBehaviour {
 
 		body.velocity = velocity;
 
+		#region Mouse movement
 		float mouseX = Input.GetAxis ("Mouse X");
 		float mouseY = -Input.GetAxis ("Mouse Y");
 		if (mouseX != 0 || mouseY != 0) {
 			Vector3 rot = oldRotation.eulerAngles;
 
-			/*
-			float xRot = rot.x;
-			float tent = rot.x + (rotationScale * mouseY);
+			xRot = xRot + (rotationScale * mouseX);
+			yRot = Mathf.Clamp(yRot + (rotationScale * mouseY), -90f, 90f);
 
-			if (xRot > 270 && tent < 270) {
-				xRot = -89;
-			} else if (xRot < 90 && tent > 90) {
-				xRot = 89;
-			} else {
-				xRot += rotationScale * mouseY;
-			}
-            
-
-            float newYRot = rot.y + (rotationScale * mouseX);
-            */
-
-			/*
-            newRotation = Quaternion.Euler (
-				new Vector3 (
-					xRot,
-					newYRot,
-					0));
-					*/
-
-			newRotation = Quaternion.Euler (new Vector3 (
-				rot.x + (rotationScale * mouseY),
-				rot.y + (rotationScale * mouseX),
-				0));
+			newRotation = Quaternion.Euler (new Vector3 (yRot, xRot, 0));
 		}
+		#endregion
 			
-		//Debug.Log (thirdPersonDistance);
+		#region Mouse scrolling
 		thirdPersonDistance -= Input.GetAxis ("Mouse ScrollWheel");
 		if (thirdPersonDistance < 0)
 			thirdPersonDistance = 0;
+		#endregion
 
-		//this.gameObject.transform.position = newPosition;
-		this.gameObject.transform.rotation = angle;
 
 		mainCamera.transform.position = transform.position + (newRotation * new Vector3 (0, 0, -thirdPersonDistance));
 		mainCamera.transform.rotation = newRotation;
@@ -209,16 +191,13 @@ public class Controller : MonoBehaviour {
 		} else if (newYChunk > yChunk) {
 			yChunk = newYChunk;
 			movementDir = Direction.UP;
-		} 
-		/*
-		else if (newZChunk < zChunk) {
+		} else if (newZChunk < zChunk) {
 			zChunk = newZChunk;
 			movementDir = Direction.BACK;
 		} else if (newZChunk > zChunk) {
 			zChunk = newZChunk;
 			movementDir = Direction.FRONT;
 		}
-		*/
 
 		if (movementDir != Direction.NONE) {
 			Generator.shiftArray(movementDir);

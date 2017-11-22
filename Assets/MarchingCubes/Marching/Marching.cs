@@ -27,9 +27,8 @@ namespace MarchingCubesProject
             WindingOrder = new int[] { 0, 1, 2 };
         }
 
-        public virtual void Generate(IList<float> voxels, int width, int height, int depth, IList<Vector3> verts, IList<int> indices)
+		public virtual void Generate(float[] voxels, int width, int height, int depth, IList<Vector3> verts, IList<int> indices)
         {
-
             if (Surface > 0.0f)
             {
                 WindingOrder[0] = 0;
@@ -43,33 +42,45 @@ namespace MarchingCubesProject
                 WindingOrder[2] = 0;
             }
 
-            int x, y, z, i;
-            int ix, iy, iz;
-            for (x = 0; x < width - 1; x++)
-            {
-                for (y = 0; y < height - 1; y++)
-                {
-                    for (z = 0; z < depth - 1; z++)
-                    {
-                        //Get the values in the 8 neighbours which make up a cube
-						Profiler.BeginSample("Neighbor search");
-                        for (i = 0; i < 8; i++)
-                        {
-                            ix = x + VertexOffset[i, 0];
-                            iy = y + VertexOffset[i, 1];
-                            iz = z + VertexOffset[i, 2];
+            int x, y, z;
+			int wh = width * height;
 
-                            Cube[i] = voxels[ix + iy * width + iz * width * height];
-                        }
-						Profiler.EndSample ();
+			int[] yw = new int[height];
+			for (int i = 0; i < height; i++) { yw [i] = i * width; }
+
+			int[] zwh = new int[depth];
+			for (int i = 0; i < depth; i++) { zwh [i] = i * wh; }
+
+            for (x = 0; x < width - 1; x++) {
+                for (y = 0; y < height - 1; y++) {
+                    for (z = 0; z < depth - 1; z++) {
+                        //Get the values in the 8 neighbours which make up a cube
+						//Profiler.BeginSample("Neighbor search");
+
+						int baseIndex = x + yw[y] + zwh[z];
+						int b1 = baseIndex + 1;
+						int b1w = b1 + width;
+						int bw = baseIndex + width;
+
+						Cube [0] = voxels[baseIndex];
+						Cube [1] = voxels[b1];
+						Cube [2] = voxels[b1w];
+						Cube [3] = voxels[bw];
+
+						Cube [4] = voxels[baseIndex + wh];
+						Cube [5] = voxels[b1 + wh];
+						Cube [6] = voxels[b1w + wh];
+						Cube [7] = voxels[bw + wh];
+
+						//Profiler.EndSample ();
 
                         //Perform algorithm
-						Profiler.BeginSample("March");
+						//Profiler.BeginSample("March");
                         March(x, y, z, Cube, verts, indices);
-						Profiler.EndSample ();
+						//Profiler.EndSample ();
                     }
                 }
-            }
+			}
 
         }
 

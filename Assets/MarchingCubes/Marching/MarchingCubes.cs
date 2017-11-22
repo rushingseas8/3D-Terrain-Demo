@@ -2,6 +2,8 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 
+using UnityEngine.Profiling;
+
 using UnityEngine;
 
 namespace MarchingCubesProject
@@ -21,6 +23,7 @@ namespace MarchingCubesProject
         /// </summary>
         protected override void March(float x, float y, float z, float[] cube, IList<Vector3> vertList, IList<int> indexList)
         {
+			//Profiler.BeginSample ("March setup");
             int i, j, vert, idx;
             int flagIndex = 0;
             float offset = 0.0f;
@@ -34,6 +37,9 @@ namespace MarchingCubesProject
             //If the cube is entirely inside or outside of the surface, then there will be no intersections
             if (edgeFlags == 0) return;
 
+			//Profiler.EndSample ();
+
+			//Profiler.BeginSample ("March intersection");
             //Find the point of intersection of the surface with each edge
             for (i = 0; i < 12; i++)
             {
@@ -47,21 +53,24 @@ namespace MarchingCubesProject
                     EdgeVertex[i].z = z + (VertexOffset[EdgeConnection[i, 0], 2] + offset * EdgeDirection[i, 2]);
                 }
             }
+			//Profiler.EndSample ();
 
+			//Profiler.BeginSample ("March triangles");
             //Save the triangles that were found. There can be up to five per cube
-            for (i = 0; i < 5; i++)
+            for (i = 0; i < 15; i+=3)
             {
-                if (TriangleConnectionTable[flagIndex, 3 * i] < 0) break;
+                if (TriangleConnectionTable[flagIndex, i] < 0) break;
 
                 idx = vertList.Count;
 
                 for (j = 0; j < 3; j++)
                 {
-                    vert = TriangleConnectionTable[flagIndex, 3 * i + j];
+                    vert = TriangleConnectionTable[flagIndex, i + j];
                     indexList.Add(idx + WindingOrder[j]);
                     vertList.Add(EdgeVertex[vert]);
                 }
-            }
+			}
+			//Profiler.EndSample ();
         }
 
         /// <summary>
