@@ -2,6 +2,9 @@
 using System.Collections.Generic;
 using UnityEngine;
 
+using System;
+using System.Runtime.InteropServices;
+
 using LibNoise.Generator;
 
 public class GameManager : MonoBehaviour {
@@ -64,6 +67,7 @@ public class GameManager : MonoBehaviour {
 			}
 		}
 		*/
+
 		Generator.generate ();
 	}
 

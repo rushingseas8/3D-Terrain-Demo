@@ -3,12 +3,15 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Profiling;
 
+// DLL support
+using System.Runtime.InteropServices;
+
 using LibNoise.Generator;
 using MarchingCubesProject;
 
 public class Generator : MonoBehaviour {
 
-	private static RidgedMultifractal noiseGen;
+	//private static RidgedMultifractal noiseGen;
 	//private static SimplexNoiseGenerator noiseGen;
 
 	public static int size = 8;
@@ -36,9 +39,17 @@ public class Generator : MonoBehaviour {
 	public static int renderRadius = 3;
 	public static int renderDiameter = (renderRadius * 2) + 1;
 
+	// We use the custom C code for extra speed
+	[DllImport ("FastPerlin")]
+	private static extern double GetValue (double x, double y, double z);
+
+	//[DllImport ("FastPerlin")]
+	//private static extern void GetValue_All (double[,,] data, double x, double y, double z, double step);
+
 	static Generator() {
-		noiseGen = new RidgedMultifractal ();
+		//noiseGen = new RidgedMultifractal ();
 		//noiseGen = new SimplexNoiseGenerator("test");
+		//noiseGen.OctaveCount = 4;
 
 		meshOffset = new Vector3 (size / 2, size / 2, size / 2);
 
@@ -119,13 +130,39 @@ public class Generator : MonoBehaviour {
 		for (int i = 0; i < sp1; i++) {
 			for (int j = 0; j < sp1; j++) {
 				for (int k = 0; k < sp1; k++) {
-					data [Helper.coordsToIndex (sp1, i, j, k)] = (float) -noiseGen.GetValue(
+					//data [Helper.coordsToIndex (sp1, i, j, k)] = (float) -noiseGen.GetValue(
+					//	offset.x + (i / scale), offset.y + (j / scale), offset.z + (k / scale));
+
+					data [Helper.coordsToIndex (sp1, i, j, k)] = (float) -GetValue(
 						offset.x + (i / scale), offset.y + (j / scale), offset.z + (k / scale));
 				}
 			}
 		}
 
 		return data;
+
+		/*
+		double[,,] data = new double[9,9,9];
+		for (int i = 0; i < 9; i++) {
+			for (int j = 0; j < 9; j++) {
+				for (int k = 0; k < 9; k++) {
+					data [i, j, k] = 0;
+				}
+			}
+		}
+		GetValue_All(data, offset.x, offset.y, offset.z, 1.0 / scale);
+
+		float[] toReturn = new float[9 * 9 * 9];
+		for (int i = 0; i < 9; i++) {
+			for (int j = 0; j < 9; j++) {
+				for (int k = 0; k < 9; k++) {
+					toReturn [(i * 81) + (j * 9) + k] = (float) data [i, j, k];
+				}
+			}
+		}
+
+		return toReturn;
+		*/
 	}
 
 	private static GameObject generateObj(Vector3 position, bool doubleSided = false) {
@@ -146,7 +183,7 @@ public class Generator : MonoBehaviour {
 
 		//Debug.Log (verts.Count);
 
-		//Profiler.BeginSample ("Mesh generation");
+		Profiler.BeginSample ("Mesh generation");
 		GameObject newObj = generateEmpty ();
 		assignMesh (newObj, verts.ToArray (), tris.ToArray ());
 		newObj.transform.position = new Vector3(position.z * size, position.y * size, position.x * size) - meshOffset;
@@ -154,7 +191,7 @@ public class Generator : MonoBehaviour {
 
 		//newObj.transform.localScale = new Vector3 (resolution, resolution, resolution);
 
-		//Profiler.EndSample ();
+		Profiler.EndSample ();
 		return newObj;
 
 		/*
@@ -235,7 +272,7 @@ public class Generator : MonoBehaviour {
 		for (int i = 0; i < sp1; i++) {
 			for (int j = 0; j < sp1; j++) {
 				for (int k = 0; k < sp1; k++) {
-					data [Helper.coordsToIndex (sp1, i, j, k)] = (float) -noiseGen.GetValue(
+					data [Helper.coordsToIndex (sp1, i, j, k)] = (float) -GetValue(
 						offset.x + (i / scale), offset.y + (j / scale), offset.z + (k / scale));
 				}
 			}

@@ -2,6 +2,8 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 
+using UnityEngine.Profiling;
+
 using UnityEngine;
 
 namespace MarchingCubesProject
@@ -50,6 +52,7 @@ namespace MarchingCubesProject
                     for (z = 0; z < depth - 1; z++)
                     {
                         //Get the values in the 8 neighbours which make up a cube
+						Profiler.BeginSample("Neighbor search");
                         for (i = 0; i < 8; i++)
                         {
                             ix = x + VertexOffset[i, 0];
@@ -58,9 +61,12 @@ namespace MarchingCubesProject
 
                             Cube[i] = voxels[ix + iy * width + iz * width * height];
                         }
+						Profiler.EndSample ();
 
                         //Perform algorithm
+						Profiler.BeginSample("March");
                         March(x, y, z, Cube, verts, indices);
+						Profiler.EndSample ();
                     }
                 }
             }

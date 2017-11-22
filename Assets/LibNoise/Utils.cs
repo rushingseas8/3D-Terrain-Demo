@@ -165,52 +165,99 @@ namespace LibNoise
 
         internal static double GradientCoherentNoise3D(double x, double y, double z, long seed, QualityMode quality)
         {
+			// Multiplication count:
+			// 6 for noise * x0, x1, ...
+			// 3 * 8 = 24 for gradient noise
+			// 4 + 2 + 1 = 7 for linear interpolation
+
             var x0 = x > 0.0 ? (int) x : (int) x - 1;
             var x1 = x0 + 1;
             var y0 = y > 0.0 ? (int) y : (int) y - 1;
             var y1 = y0 + 1;
             var z0 = z > 0.0 ? (int) z : (int) z - 1;
             var z1 = z0 + 1;
-            double xs = 0, ys = 0, zs = 0;
-            switch (quality)
-            {
-                case QualityMode.Low:
-                {
-                    xs = (x - x0);
-                    ys = (y - y0);
-                    zs = (z - z0);
-                    break;
-                }
-                case QualityMode.Medium:
-                {
-                    xs = MapCubicSCurve(x - x0);
-                    ys = MapCubicSCurve(y - y0);
-                    zs = MapCubicSCurve(z - z0);
-                    break;
-                }
-                case QualityMode.High:
-                {
-                    xs = MapQuinticSCurve(x - x0);
-                    ys = MapQuinticSCurve(y - y0);
-                    zs = MapQuinticSCurve(z - z0);
-                    break;
-                }
-            }
-            var n0 = GradientNoise3D(x, y, z, x0, y0, z0, seed);
-            var n1 = GradientNoise3D(x, y, z, x1, y0, z0, seed);
-            var ix0 = InterpolateLinear(n0, n1, xs);
-            n0 = GradientNoise3D(x, y, z, x0, y1, z0, seed);
-            n1 = GradientNoise3D(x, y, z, x1, y1, z0, seed);
-            var ix1 = InterpolateLinear(n0, n1, xs);
-            var iy0 = InterpolateLinear(ix0, ix1, ys);
-            n0 = GradientNoise3D(x, y, z, x0, y0, z1, seed);
-            n1 = GradientNoise3D(x, y, z, x1, y0, z1, seed);
-            ix0 = InterpolateLinear(n0, n1, xs);
-            n0 = GradientNoise3D(x, y, z, x0, y1, z1, seed);
-            n1 = GradientNoise3D(x, y, z, x1, y1, z1, seed);
-            ix1 = InterpolateLinear(n0, n1, xs);
-            var iy1 = InterpolateLinear(ix0, ix1, ys);
-            return InterpolateLinear(iy0, iy1, zs);
+
+			var xx0 = GeneratorNoiseX * x0;
+			var xx1 = GeneratorNoiseX * x1;
+			var yy0 = GeneratorNoiseY * y0;
+			var yy1 = GeneratorNoiseY * y1;
+			var zz0 = GeneratorNoiseZ * z0;
+			var zz1 = GeneratorNoiseZ * z1;
+
+			var seedVal = GeneratorSeed * seed;
+
+			var xmx0 = x - x0;
+			var xmx1 = x - x1;
+			var ymy0 = y - y0;
+			var ymy1 = y - y1;
+			var zmz0 = z - z0;
+			var zmz1 = z - z1;
+
+			var i = (xx0 + yy0 + zz0 + seedVal) & 0xffffffff;
+			i ^= (i >> GeneratorShift);
+			i &= 0xff;
+			i = i << 2;
+			var n0 = ((Randoms [i++] * (xmx0)) + (Randoms [i++] * (ymy0)) + (Randoms [i] * (zmz0))) * 2.12;
+			//var n0 = GradientNoise3D(x, y, z, x0, y0, z0, seed);
+
+			i = (xx1 + yy0 + zz0 + seedVal) & 0xffffffff;
+			i ^= (i >> GeneratorShift);
+			i &= 0xff;
+			i = i << 2;
+			var n1 = ((Randoms [i++] * (xmx1)) + (Randoms [i++] * (ymy0)) + (Randoms [i] * (zmz0))) * 2.12;
+            //var n1 = GradientNoise3D(x, y, z, x1, y0, z0, seed);
+
+			var ix0 = n0 + xmx0 * (n1 - n0);
+
+			i = (xx0 + yy1 + zz0 + seedVal) & 0xffffffff;
+			i ^= (i >> GeneratorShift);
+			i &= 0xff;
+			i = i << 2;
+			n0 = ((Randoms [i++] * (xmx0)) + (Randoms [i++] * (ymy1)) + (Randoms [i] * (zmz0))) * 2.12;
+            //n0 = GradientNoise3D(x, y, z, x0, y1, z0, seed);
+
+			i = (xx1 + yy1 + zz0 + seedVal) & 0xffffffff;
+			i ^= (i >> GeneratorShift);
+			i &= 0xff;
+			i = i << 2;
+			n1 = ((Randoms [i++] * (xmx1)) + (Randoms [i++] * (ymy1)) + (Randoms [i] * (zmz0))) * 2.12;
+            //n1 = GradientNoise3D(x, y, z, x1, y1, z0, seed);
+
+			var ix1 = n0 + xmx0 * (n1 - n0);
+			var iy0 = ix0 + ymy0 * (ix1 - ix0);
+
+			i = (xx0 + yy0 + zz1 + seedVal) & 0xffffffff;
+			i ^= (i >> GeneratorShift);
+			i &= 0xff;
+			i = i << 2;
+			n0 = ((Randoms [i++] * (xmx0)) + (Randoms [i++] * (ymy0)) + (Randoms [i] * (zmz1))) * 2.12;
+            //n0 = GradientNoise3D(x, y, z, x0, y0, z1, seed);
+
+			i = (xx1 + yy0 + zz1 + seedVal) & 0xffffffff;
+			i ^= (i >> GeneratorShift);
+			i &= 0xff;
+			i = i << 2;
+			n1 = ((Randoms [i++] * (xmx1)) + (Randoms [i++] * (ymy0)) + (Randoms [i] * (zmz1))) * 2.12;
+            //n1 = GradientNoise3D(x, y, z, x1, y0, z1, seed);
+
+			ix0 = n0 + xmx0 * (n1 - n0);
+
+			i = (xx0 + yy1 + zz1 + seedVal) & 0xffffffff;
+			i ^= (i >> GeneratorShift);
+			i &= 0xff;
+			i = i << 2;
+			n0 = ((Randoms [i++] * (xmx0)) + (Randoms [i++] * (ymy1)) + (Randoms [i] * (zmz1))) * 2.12;
+            //n0 = GradientNoise3D(x, y, z, x0, y1, z1, seed);
+
+			i = (xx1 + yy1 + zz1 + seedVal) & 0xffffffff;
+			i ^= (i >> GeneratorShift);
+			i &= 0xff;
+			i = i << 2;
+			n1 = ((Randoms [i++] * (xmx1)) + (Randoms [i++] * (ymy1)) + (Randoms [i] * (zmz1))) * 2.12;
+            //n1 = GradientNoise3D(x, y, z, x1, y1, z1, seed);
+			ix1 = n0 + xmx0 * (n1 - n0);
+			var iy1 = ix0 + ymy0 * (ix1 - ix0);
+			return iy0 + zmz0 * (iy1 - iy0);
         }
 
         internal static double GradientNoise3D(double fx, double fy, double fz, int ix, int iy, int iz, long seed)
@@ -219,13 +266,8 @@ namespace LibNoise
                      GeneratorSeed * seed) & 0xffffffff;
             i ^= (i >> GeneratorShift);
             i &= 0xff;
-            var xvg = Randoms[(i << 2)];
-            var yvg = Randoms[(i << 2) + 1];
-            var zvg = Randoms[(i << 2) + 2];
-            var xvp = (fx - ix);
-            var yvp = (fy - iy);
-            var zvp = (fz - iz);
-            return ((xvg * xvp) + (yvg * yvp) + (zvg * zvp)) * 2.12;
+			i = i << 2;
+			return ((Randoms[i++] * (fx - ix)) + (Randoms[i++] * (fy - iy)) + (Randoms[i] * (fz - iz))) * 2.12;
         }
 
         internal static double InterpolateCubic(double a, double b, double c, double d, double position)
@@ -233,13 +275,14 @@ namespace LibNoise
             var p = (d - c) - (a - b);
             var q = (a - b) - p;
             var r = c - a;
-            var s = b;
-            return p * position * position * position + q * position * position + r * position + s;
+            //var s = b;
+            return p * position * position * position + q * position * position + r * position + b;
         }
 
         internal static double InterpolateLinear(double a, double b, double position)
         {
-            return ((1.0 - position) * a) + (position * b);
+            //return ((1.0 - position) * a) + (position * b);
+			return a + position * (b - a);
         }
 
         internal static double MakeInt32Range(double value)

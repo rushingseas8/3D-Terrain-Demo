@@ -136,8 +136,6 @@ namespace LibNoise.Generator
             z *= _frequency;
             var value = 0.0;
             var weight = 1.0;
-            var offset = 1.0; // TODO: Review why Offset is never assigned
-            var gain = 2.0;   // TODO: Review why gain is never assigned
             for (var i = 0; i < _octaveCount; i++)
             {
                 var nx = Utils.MakeInt32Range(x);
@@ -146,10 +144,10 @@ namespace LibNoise.Generator
                 long seed = (_seed + i) & 0x7fffffff;
                 var signal = Utils.GradientCoherentNoise3D(nx, ny, nz, seed, _quality);
                 signal = Math.Abs(signal);
-                signal = offset - signal;
+                signal = 1.0 - signal;
                 signal *= signal;
                 signal *= weight;
-                weight = signal * gain;
+                weight = signal * 2.0;
                 weight = Mathf.Clamp01((float) weight);
                 value += (signal * _weights[i]);
                 x *= _lacunarity;

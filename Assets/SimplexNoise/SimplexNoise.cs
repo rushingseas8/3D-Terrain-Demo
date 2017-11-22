@@ -9,12 +9,16 @@ public class SimplexNoiseGenerator {
 	private float onesixth = 0.166666667f;
 	private int[] T;
 
+	private static float k0;
+
 	public SimplexNoiseGenerator() {
 		if (T == null) {
 			System.Random rand = new System.Random();
 			T = new int[8];
 			for (int q = 0; q < 8; q++)
 				T[q] = rand.Next();
+
+			k0 = kay (0);
 		}
 	}
 
@@ -31,10 +35,13 @@ public class SimplexNoiseGenerator {
 			}
 			T[q] = b;
 		}
+
+		k0 = kay (0);
 	}
 
 	public SimplexNoiseGenerator(int[] seed) { // {0x16, 0x38, 0x32, 0x2c, 0x0d, 0x13, 0x07, 0x2a}
 		T = seed;
+		k0 = kay (0);
 	}
 
 	public string GetSeed() {
@@ -82,7 +89,7 @@ public class SimplexNoiseGenerator {
 		int hi = u >= w ? u >= v ? 0 : 1 : v >= w ? 1 : 2;
 		int lo = u < w ? u < v ? 0 : 1 : v < w ? 1 : 2;
 
-		return kay(hi) + kay(3 - hi - lo) + kay(lo) + kay(0);
+		return kay(hi) + kay(3 - hi - lo) + kay(lo) + k0;
 	}
 
 	float kay(int a) {
