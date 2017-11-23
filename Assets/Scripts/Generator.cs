@@ -14,10 +14,11 @@ public class Generator : MonoBehaviour {
 	//private static RidgedMultifractal noiseGen;
 	//private static SimplexNoiseGenerator noiseGen;
 
-	public static int size = 4;
+	public static int size = 8;
 	public static float scale = 16f;
 	//public static float[] data;
 
+	// By how much should each mesh be offset by default? This centers it around the player.
 	private static Vector3 meshOffset;
 
 	public static float resolution = 2.0f;
@@ -36,7 +37,7 @@ public class Generator : MonoBehaviour {
 	 */
 	public static Dictionary<Vector3Int, GameObject> chunkCache;
 
-	public static int renderRadius = 6;
+	public static int renderRadius = 3;
 	public static int renderDiameter = (renderRadius * 2) + 1;
 
 	// We use the custom C code for extra speed
@@ -51,14 +52,16 @@ public class Generator : MonoBehaviour {
 	private const int DEFAULT_VERTEX_BUFFER_SIZE = 1800;	// Minimum found to be 1700; adding some room for error.
 	private const int DEFAULT_TRI_BUFFER_SIZE = 1750;		// Minimum 1650.
 
-	private static Vector3 GEN_OFFSET = new Vector3 (1023, 1942, 7777);
+	//private static Vector3 GEN_OFFSET = new Vector3 (1023, 1942, 7777);
+	private static Vector3 GEN_OFFSET = Vector3.zero;
 
 	static Generator() {
 		//noiseGen = new RidgedMultifractal ();
 		//noiseGen = new SimplexNoiseGenerator("test");
 		//noiseGen.OctaveCount = 4;
 
-		meshOffset = new Vector3 (size / 2, size / 2, size / 2);
+		//meshOffset = new Vector3 (size / 2, size / 2, size / 2); // Centered on the player; endless caves
+		meshOffset = new Vector3 (size / 2, 0, size / 2); // Centered on the player on the x/z plane
 
 		defaultMaterial = new Material(Resources.Load("Materials/Rock") as Material);
 
@@ -83,8 +86,8 @@ public class Generator : MonoBehaviour {
 			RenderSettings.fogDensity = 0.17f;
 		}
 		*/
-		RenderSettings.fog = true;
-		RenderSettings.fogDensity = 0.10f;
+		//RenderSettings.fog = true;
+		//RenderSettings.fogDensity = 0.10f;
 
 		//RenderSettings.fogDensity = Mathf.Exp (-0.33f * renderDiameter);
 	}
@@ -106,6 +109,21 @@ public class Generator : MonoBehaviour {
 				}
 			}
 		}
+
+		// Land-based generation, for underground caves
+		/*
+		for (int i = -renderRadius; i <= renderRadius; i++) {
+			for (int j = -renderDiameter; j < 0; j++) {
+				for (int k = -renderRadius; k <= renderRadius; k++) {
+					GameObject newObj = generateObj (new Vector3 (i, j, k));
+
+					chunks [k + renderRadius, j + renderDiameter, i + renderRadius] = newObj;
+					//newObj.name = "(" + (i + renderRadius) + ", " + (j + renderRadius) + ", " + (k + renderRadius) + ")";
+					chunkCache [new Vector3Int (i, j, k)] = newObj;
+				}
+			}
+		}
+		*/
 
 		/*
 		// Testing with just cubes
@@ -262,6 +280,7 @@ public class Generator : MonoBehaviour {
 
 		if (unfinishedObj == null) { return; }
 		unfinishedObj.GetComponent<MeshCollider>().sharedMesh = mesh; 
+		//unfinishedObj.GetComponent<MeshCollider>().
 	}
 
 	public static IEnumerator generateAsync(Vector3 position, GameObject unfinishedObj, bool doubleSided=false) {

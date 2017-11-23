@@ -21,7 +21,7 @@ public class Controller : MonoBehaviour {
 	public float thirdPersonDistance = 10.0f;
 	public float jumpVelocity = 5.0f;
 
-	public static bool flyingMode = false;
+	public static bool flyingMode = true;
     public static bool cameraKeyLock = true;
 
 	private float movementScale = 3f;
@@ -31,6 +31,8 @@ public class Controller : MonoBehaviour {
 	private static int yChunk = 0;
 	private static int zChunk = 0;
 
+	private static Color skyColor = new Color (49 / 255f, 77 / 255f, 121 / 255f);
+	private static Color caveColor = new Color (0, 0, 0);
 
 	// Use this for initialization
 	void Start () {
@@ -38,7 +40,7 @@ public class Controller : MonoBehaviour {
 		backward = new KeyCode[]{ KeyCode.S, KeyCode.DownArrow };
 		left = new KeyCode[]{ KeyCode.A, KeyCode.LeftArrow };
 		right = new KeyCode[]{ KeyCode.D, KeyCode.RightArrow };
-		up = new KeyCode[]{ KeyCode.Q, KeyCode.LeftShift, KeyCode.Space };
+		up = new KeyCode[]{ /*KeyCode.Q,*/ KeyCode.LeftShift, KeyCode.Space };
 		down = new KeyCode[]{ KeyCode.E, KeyCode.LeftControl, KeyCode.LeftAlt };
 
 		slow = KeyCode.Z;
@@ -142,6 +144,13 @@ public class Controller : MonoBehaviour {
 			}
 		}
 
+		if (Input.GetKeyDown (KeyCode.Q)) {
+			GameObject newTorch = GameObject.Instantiate(Resources.Load ("Prefabs/Torch") as GameObject);
+			newTorch.transform.position = this.transform.position + (angle * Vector3.forward * 0.5f);
+			//newTorch.GetComponent<Rigidbody> ().AddForceAtPosition (angle * Vector3.forward * 10f, newTorch.transform.position + Vector3.up * 0.6f);
+			newTorch.GetComponent<Rigidbody>().AddForceAtPosition(mainCamera.transform.rotation * Vector3.forward * 100f, (Vector3.up));
+		}
+
 		body.velocity = velocity;
 
 		#region Mouse movement
@@ -166,6 +175,16 @@ public class Controller : MonoBehaviour {
 
 		mainCamera.transform.position = transform.position + (newRotation * new Vector3 (0, 0, -thirdPersonDistance));
 		mainCamera.transform.rotation = newRotation;
+
+		// Above / underground transition
+		if (mainCamera.transform.position.y > 0) {
+			mainCamera.backgroundColor = skyColor;
+			RenderSettings.fog = false;
+		} else {
+			mainCamera.backgroundColor = caveColor;
+			RenderSettings.fog = true;
+			RenderSettings.fogDensity = (mainCamera.transform.position.y / -10.0f) * 0.1f;
+		}
 
 		#region Generate Terrain
 
@@ -199,7 +218,7 @@ public class Controller : MonoBehaviour {
 			movementDir = Direction.FRONT;
 		}
 
-		if (movementDir != Direction.NONE) {
+		if (zChunk < 0 && movementDir != Direction.NONE) {
 			Generator.shiftArray(movementDir);
 			int[] regenerateIndices = CubeBuffer.faceIndices[(int)movementDir];
 			for (int i = 0; i < regenerateIndices.Length; i++) {
@@ -208,6 +227,10 @@ public class Controller : MonoBehaviour {
 				int newX = -Generator.renderRadius + xChunk + pos.x;
 				int newY = -Generator.renderRadius + yChunk + pos.y;
 				int newZ = -Generator.renderRadius + zChunk + pos.z;
+
+				if (newY >= 0) {
+					continue;
+				}
 
 				Vector3Int genPos = new Vector3Int(newZ, newY, newX);
 				//Vector3Int genPosSwapped = new Vector3Int(newX, newY, newZ);
