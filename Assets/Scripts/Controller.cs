@@ -3,58 +3,64 @@ using System.Collections.Generic;
 using UnityEngine;
 
 public class Controller : MonoBehaviour {
-
-	public KeyCode[] forward { get; set; } 
-	public KeyCode[] backward { get; set; }
-	public KeyCode[] left { get; set; }
-	public KeyCode[] right { get; set; }
+	
 	public KeyCode[] up { get; set; }
 	public KeyCode[] down { get; set; }
-    public KeyCode slow;
-    public KeyCode cameraLock;
+	public KeyCode cursorLockKey = KeyCode.Escape;
 
-	public Camera mainCamera;
+	// How far away is the camera from the user in third person mode? Default 10.0f.
+	public float thirdPersonDistance = 10.0f;
 
+	// How fast do we jump? Default 5.0f. TODO: make this a target height
+	public float jumpVelocity = 5.0f;
+
+	// How quickly do we move using WASD? Default 3.0f.
+	public float movementScale = 3f;
+
+	// How sensitive is the mouse movement? Default 5.0f.
+	public float rotationScale = 5f;
+
+	// When does fog begin to creep in below ground? Default 0.0f.
+	public float fogMin = 0.0f;
+
+	// When is fog a maximum value? Default -10.0f.
+	public float fogMax = -10.0f;
+
+	// Are we flying? If true, we also ignore collision and gravity.
+	public bool flyingMode = false;
+
+	// Is the mouse cursor locked to the screen and hidden? (Default parameter)
+	public bool cursorLocked = true;
+
+	// A reference to the camera we're controlling.
+	private Camera mainCamera;
+
+	// These represent the camera rotation parameters. We sum up the input multiplied
+	// by the rotation scale, and clamp it to prevent jittering found using the naiive
+	// methods.
 	private static float xRot = 0;
 	private static float yRot = 0;
 
-	public float thirdPersonDistance = 10.0f;
-	public float jumpVelocity = 5.0f;
-
-	public static bool flyingMode = true;
-    public static bool cameraKeyLock = true;
-
-	private float movementScale = 3f;
-	private float rotationScale = 5f;
-
+	// Keeps track of our global chunk position. This is used to generate and store the
+	// terrain around the player, and apply reloading logic as necessary. 
 	private static int xChunk = 0;
 	private static int yChunk = 0;
 	private static int zChunk = 0;
 
+	// The default background color used for the camera. "caveColor" is black so that
+	// we can cleanly hide the unloaded chunks in the distance underground.
 	private static Color skyColor = new Color (49 / 255f, 77 / 255f, 121 / 255f);
 	private static Color caveColor = new Color (0, 0, 0);
 
-	// Use this for initialization
 	void Start () {
-		forward	= new KeyCode[]{ KeyCode.W, KeyCode.UpArrow };
-		backward = new KeyCode[]{ KeyCode.S, KeyCode.DownArrow };
-		left = new KeyCode[]{ KeyCode.A, KeyCode.LeftArrow };
-		right = new KeyCode[]{ KeyCode.D, KeyCode.RightArrow };
 		up = new KeyCode[]{ /*KeyCode.Q,*/ KeyCode.LeftShift, KeyCode.Space };
 		down = new KeyCode[]{ KeyCode.E, KeyCode.LeftControl, KeyCode.LeftAlt };
 
-		slow = KeyCode.Z;
-		cameraLock = KeyCode.Escape;
-
 		mainCamera = Camera.main;
 
-        Cursor.lockState = CursorLockMode.Locked;
-
-		/*
-		if (flyingMode)
-			movementScale = 2.5f;
-		else
-			movementScale = 0.2f;*/
+		if (cursorLocked) {
+			Cursor.lockState = CursorLockMode.Locked;
+		}
 		
 		if (flyingMode) {
 			GetComponent<Rigidbody> ().useGravity = false;
@@ -63,7 +69,8 @@ public class Controller : MonoBehaviour {
 		}
 	}
 
-	bool keycodePressed(KeyCode[] arr) {
+	// True if any of the keycodes in the provided array are pressed or held.
+	private bool keycodePressed(KeyCode[] arr) {
 		for(int i = 0; i < arr.Length; i++) {
 			if(Input.GetKey(arr[i])) {
 				return true;
@@ -72,7 +79,8 @@ public class Controller : MonoBehaviour {
 		return false;
 	}
 
-	bool keycodeDown(KeyCode[] arr) {
+	// True if any of the keycodes in the provided array held down this frame.
+	private bool keycodeDown(KeyCode[] arr) {
 		for(int i = 0; i < arr.Length; i++) {
 			if(Input.GetKeyDown(arr[i])) {
 				return true;
@@ -81,11 +89,19 @@ public class Controller : MonoBehaviour {
 		return false;
 	}
 
-	// Update is called once per frame
 	void Update () {
+		// The old and new rotations of the player. Calculated in the Mouse Movement section.
 		Quaternion oldRotation = mainCamera.transform.rotation;
 		Quaternion newRotation = oldRotation;
 
+		// The angle we are facing, calculated facing downwards.
+		Quaternion angle = Quaternion.AngleAxis (oldRotation.eulerAngles.y, Vector3.up);
+		transform.rotation = angle; // Update the player model to face this angle
+
+		// The new velocity of the player. Calculated in the Vertical and Horizontal movement sections.
+		Vector3 newVelocity;
+
+		// The rigidbody of the player. We set this body's velocity at the end.
 		Rigidbody body = GetComponent<Rigidbody> ();
 
 		// If we are flying, then ignore gravity and stop moving when no keys are pressed.
@@ -93,65 +109,54 @@ public class Controller : MonoBehaviour {
 			body.velocity = Vector3.zero;
 		}
 
-		// The angle we are facing, constrained to ignore the up/down axis.
-		Quaternion angle = Quaternion.AngleAxis (mainCamera.transform.rotation.eulerAngles.y, Vector3.up);
-		this.gameObject.transform.rotation = angle;
-		float newMovementScale = movementScale;
-		bool onGround = false;
-
-		if (Physics.Raycast (transform.position, Vector3.down, 3.0f)) {
-			onGround = true;
+		#region Cursor locking
+		if (Input.GetKeyDown(cursorLockKey)) {
+			cursorLocked = !cursorLocked;
+			if (cursorLocked) {
+				Cursor.lockState = CursorLockMode.Locked;
+				Cursor.visible = false;
+			} else {
+				Cursor.lockState = CursorLockMode.None;
+				Cursor.visible = true;
+			}
 		}
+		#endregion
 
-		if (Input.GetKeyDown (KeyCode.Escape)) {
-			Cursor.lockState = CursorLockMode.None;
-		}
+		#region Horizontal movement
+		// Grab the horizontal and vertical (forward/backward) movement and rotate it based on where we're looking
+		newVelocity = angle * new Vector3 (Input.GetAxis ("Horizontal"), 0.0f, Input.GetAxis ("Vertical")) * movementScale;
 
-		if (Input.GetKeyUp(cameraLock)) {
-            cameraKeyLock = !cameraKeyLock;
-        }
-        if (Input.GetKey(slow)) {
-            newMovementScale *= 0.5f;
-        }
+		// We need to preserve the original Y velocity, or else gravity won't work right.
+		newVelocity.y = body.velocity.y;
+		#endregion
 
-		float oldYVelocity = body.velocity.y;
-		Vector3 velocity = angle * new Vector3 (Input.GetAxis ("Horizontal"), 0.0f, Input.GetAxis ("Vertical")) * movementScale;
-		velocity.y = oldYVelocity;
-
-        if (cameraKeyLock) {
-            Cursor.lockState = CursorLockMode.Locked;
-            Cursor.visible = false;
-        } else {
-            Cursor.lockState = CursorLockMode.None;
-            Cursor.visible = true;
-        }
-
+		#region Vertical movement
+		// If we are flying, then up and down work the same as WASD.
 		if (flyingMode) {
 			if (keycodePressed (up)) {
-				//newPosition += (Vector3.up * movementScale);
-				velocity.y = movementScale;
+				newVelocity.y = movementScale;
 			}
 			if (keycodePressed (down)) {
-				//newPosition += (Vector3.down * movementScale);
-				velocity.y = -movementScale;
+				newVelocity.y = -movementScale;
 			}
 		} else {
-			//Only jump if we're on the ground (or very close)
+			// If we're not flying, then we check if we're on the ground before jumping.
 			if (keycodeDown (up)) {	
-				if (onGround) {
-					velocity.y = jumpVelocity;
+				// We raycast down to determine this status.
+				if (Physics.Raycast (transform.position, Vector3.down, 3.0f)) {
+					newVelocity.y = jumpVelocity;
 				}
 			}
 		}
+		#endregion
 
+		#region Torch throwing
 		if (Input.GetKeyDown (KeyCode.Q)) {
 			GameObject newTorch = GameObject.Instantiate(Resources.Load ("Prefabs/Torch") as GameObject);
 			newTorch.transform.position = this.transform.position + (angle * Vector3.forward * 0.5f);
-			//newTorch.GetComponent<Rigidbody> ().AddForceAtPosition (angle * Vector3.forward * 10f, newTorch.transform.position + Vector3.up * 0.6f);
 			newTorch.GetComponent<Rigidbody>().AddForceAtPosition(mainCamera.transform.rotation * Vector3.forward * 100f, (Vector3.up));
 		}
-
-		body.velocity = velocity;
+		#endregion
 
 		#region Mouse movement
 		float mouseX = Input.GetAxis ("Mouse X");
@@ -172,26 +177,9 @@ public class Controller : MonoBehaviour {
 			thirdPersonDistance = 0;
 		#endregion
 
-
-		mainCamera.transform.position = transform.position + (newRotation * new Vector3 (0, 0, -thirdPersonDistance));
-		mainCamera.transform.rotation = newRotation;
-
-		// Above / underground transition
-//		if (mainCamera.transform.position.y > 0) {
-//			mainCamera.backgroundColor = skyColor;
-//			RenderSettings.fog = false;
-//		} else {
-//			mainCamera.backgroundColor = caveColor;
-//			RenderSettings.fog = true;
-//			RenderSettings.fogDensity = (mainCamera.transform.position.y / -10.0f) * 0.1f;
-//		}
-
 		#region Generate Terrain
 
-		//int newXChunk = (int)(transform.position.z / 1);
-		//int newYChunk = (int)(transform.position.y / 1);
-		//int newZChunk = (int)(transform.position.x / 1);
-
+		// TODO: make the range (-Size, 0) count as chunk -1, rather than its current 0
 		int newXChunk = (int)(transform.position.x / Generator.size);
 		int newYChunk = (int)(transform.position.y / Generator.size);
 		int newZChunk = (int)(transform.position.z / Generator.size);
@@ -210,7 +198,8 @@ public class Controller : MonoBehaviour {
 		} else if (newYChunk > yChunk) {
 			yChunk = newYChunk;
 			movementDir = Direction.UP;
-		} else if (newZChunk < zChunk) {
+		}
+		else if (newZChunk < zChunk) {
 			zChunk = newZChunk;
 			movementDir = Direction.BACK;
 		} else if (newZChunk > zChunk) {
@@ -228,12 +217,7 @@ public class Controller : MonoBehaviour {
 				int newY = -Generator.renderRadius + yChunk + pos.y;
 				int newZ = -Generator.renderRadius + zChunk + pos.z;
 
-				//if (newY >= 0) {
-				//	continue;
-				//}
-
 				Vector3Int genPos = new Vector3Int(newZ, newY, newX);
-				//Vector3Int genPosSwapped = new Vector3Int(newX, newY, newZ);
 
 				// Try to find the given cave chunk in the cache, first.
 				if (Generator.chunkCache.ContainsKey(genPos)) {
@@ -253,5 +237,26 @@ public class Controller : MonoBehaviour {
 		}
 
 		#endregion
+
+		// Above / underground transition
+		if (mainCamera.transform.position.y > fogMin) {
+			mainCamera.backgroundColor = skyColor;
+			RenderSettings.fog = false;
+		} else {
+			/*
+			float fogFactor = mainCamera.transform.position.y / fogMax;
+
+			RenderSettings.fog = true;
+			RenderSettings.fogDensity = fogFactor * Generator.fogStrength;
+			mainCamera.backgroundColor = Color.Lerp(skyColor, caveColor, fogFactor);
+			*/
+		}
+
+		// Update velocity
+		body.velocity = newVelocity;
+
+		// Update camera position (which may differ due to the third person view)
+		mainCamera.transform.position = transform.position + (newRotation * new Vector3 (0, 0, -thirdPersonDistance));
+		mainCamera.transform.rotation = newRotation;
 	}
 }

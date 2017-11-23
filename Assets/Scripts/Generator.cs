@@ -11,19 +11,21 @@ using MarchingCubesProject;
 
 public class Generator : MonoBehaviour {
 
-	//private static RidgedMultifractal noiseGen;
-	//private static SimplexNoiseGenerator noiseGen;
-
+	// How large is each mesh, in points?
 	public static int size = 8;
-	public static float scale = 16f;
-	//public static float[] data;
 
-	// By how much should each mesh be offset by default? This centers it around the player.
+	// The scale multiplier on the noise we use. Larger values = larger terrain, but less detail.
+	// Note that this shouldn't ever be 1.0 because of gradient noise being 0 at integer boundaries.
+	// If you want a scale of 1.0, try using 1.1 instead.
+	public static float scale = 16f;
+
+	// By how much should each mesh be offset by default? This is to center it around the player.
 	private static Vector3 meshOffset;
 
-	public static float resolution = 2.0f;
-
+	// The material we assign to the cave meshes.
 	private static Material defaultMaterial;
+
+	// The physics material we assign to the cave meshes.
 	private static PhysicMaterial defaultPhysics;
 
 	/*
@@ -37,10 +39,16 @@ public class Generator : MonoBehaviour {
 	 */
 	public static Dictionary<Vector3Int, GameObject> chunkCache;
 
+	// How many meshes should we load at once? The radius is how many meshes are drawn in every
+	// direction, plus one for the center. The diameter, N, is how large of an NxNxN cube is 
+	// centered around the player.
 	public static int renderRadius = 3;
 	public static int renderDiameter = (renderRadius * 2) + 1;
 
-	// We use the custom C code for extra speed
+	// How strong is the fog? Calculated from renderRadius and size.
+	public static float fogStrength = 0.10f;
+
+	// Custom C code for extra speed
 	[DllImport ("FastPerlin")]
 	private static extern double GetValue (double x, double y, double z);
 
@@ -52,16 +60,13 @@ public class Generator : MonoBehaviour {
 	private const int DEFAULT_VERTEX_BUFFER_SIZE = 1800;	// Minimum found to be 1700; adding some room for error.
 	private const int DEFAULT_TRI_BUFFER_SIZE = 1750;		// Minimum 1650.
 
+	// An offset for the terrain gen.
 	//private static Vector3 GEN_OFFSET = new Vector3 (1023, 1942, 7777);
 	private static Vector3 GEN_OFFSET = Vector3.zero;
 
 	static Generator() {
-		//noiseGen = new RidgedMultifractal ();
-		//noiseGen = new SimplexNoiseGenerator("test");
-		//noiseGen.OctaveCount = 4;
-
-		//meshOffset = new Vector3 (size / 2, size / 2, size / 2); // Centered on the player; endless caves
-		meshOffset = new Vector3 (size / 2, 0, size / 2); // Centered on the player on the x/z plane
+		meshOffset = new Vector3 (size / 2, size / 2, size / 2); // Centered on the player; endless caves
+		//meshOffset = new Vector3 (size / 2, 0, size / 2); // Centered on the player on the x/z plane
 
 		defaultMaterial = new Material(Resources.Load("Materials/Rock") as Material);
 
@@ -77,27 +82,12 @@ public class Generator : MonoBehaviour {
 			chunks[i] = null;
 		}
 
-		/*
-		if (renderDiameter == 9) {
-			RenderSettings.fogDensity = 0.07f;
-		} else if (renderDiameter == 7) {
-			RenderSettings.fogDensity = 0.10f;
-		} else if (renderDiameter == 5) {
-			RenderSettings.fogDensity = 0.17f;
-		}
-		*/
-		//RenderSettings.fog = true;
-		//RenderSettings.fogDensity = 0.10f;
-
-		//RenderSettings.fogDensity = Mathf.Exp (-0.33f * renderDiameter);
+		// Found by experimental values and fitting a curve to them
+		fogStrength = Mathf.Exp (-0.055f * (size * renderRadius + 16));
 	}
 
 	public static void generate() {
-		//noiseGen = new RidgedMultifractal ();
-		//noiseGen.OctaveCount = 10;
-
-		//int count = 3;
-
+		// This will center the generation entirely around the player. Useful for 3D cave exploration.
 		for (int i = -renderRadius; i <= renderRadius; i++) {
 			for (int j = -renderRadius; j <= renderRadius; j++) {
 				for (int k = -renderRadius; k <= renderRadius; k++) {
@@ -124,21 +114,6 @@ public class Generator : MonoBehaviour {
 			}
 		}
 		*/
-
-		/*
-		// Testing with just cubes
-		float offsetScale = size / scale;
-		for (int i = -renderRadius; i <= renderRadius; i++) {
-			for (int j = -renderRadius; j <= renderRadius; j++) {
-				for (int k = -renderRadius; k <= renderRadius; k++) {
-					GameObject newCube = GameObject.CreatePrimitive (PrimitiveType.Cube);
-					newCube.transform.position = new Vector3 (i, j, k);
-					newCube.name = "(" + i + ", " + j + ", " + k + ")";
-					chunks [i + renderRadius, j + renderRadius, k + renderRadius] = newCube;
-				}
-			}
-		}
-		*/
 	}
 
 	private static float[] generateData(int size, Vector3 position) {
@@ -158,44 +133,15 @@ public class Generator : MonoBehaviour {
 		for (int i = 0; i < sp1; i++) {
 			for (int j = 0; j < sp1; j++) {
 				for (int k = 0; k < sp1; k++) {
-					//data [Helper.coordsToIndex (sp1, i, j, k)] = (float) -noiseGen.GetValue(
-					//	offset.x + (i / scale), offset.y + (j / scale), offset.z + (k / scale));
-
-					//(x * size * size) + (y * size) + z
-
-					data [count++] = (float) -GetValue(
-						offset.x + (i / scale), offset.y + (j / scale), offset.z + (k / scale));
+					data [count++] = (float) -GetValue(offset.x + (i / scale), offset.y + (j / scale), offset.z + (k / scale));
 				}
 			}
 		}
 
 		return data;
-
-		/*
-		double[,,] data = new double[9,9,9];
-		for (int i = 0; i < 9; i++) {
-			for (int j = 0; j < 9; j++) {
-				for (int k = 0; k < 9; k++) {
-					data [i, j, k] = 0;
-				}
-			}
-		}
-		GetValue_All(data, offset.x, offset.y, offset.z, 1.0 / scale);
-
-		float[] toReturn = new float[9 * 9 * 9];
-		for (int i = 0; i < 9; i++) {
-			for (int j = 0; j < 9; j++) {
-				for (int k = 0; k < 9; k++) {
-					toReturn [(i * 81) + (j * 9) + k] = (float) data [i, j, k];
-				}
-			}
-		}
-
-		return toReturn;
-		*/
 	}
 
-	private static GameObject generateObj(Vector3 position, bool doubleSided = false) {
+	private static GameObject generateObj(Vector3 position) {
 		Profiler.BeginSample("Vertex generation");
 		float[] data = generateData (size, position);
 		Profiler.EndSample ();
@@ -210,47 +156,14 @@ public class Generator : MonoBehaviour {
 		marching.Generate(data, size + 1, size + 1, size + 1, verts, tris);
 		Profiler.EndSample ();
 
-		//Debug.Log (verts.Count);
-
 		Profiler.BeginSample ("Mesh generation");
 		GameObject newObj = generateEmpty ();
 		assignMesh (newObj, verts.ToArray (), tris.ToArray ());
 		newObj.transform.position = new Vector3(position.z * size, position.y * size, position.x * size) - meshOffset;
 		newObj.name = "(" + position.x + " ," + position.y + " ," + position.z + ")";
-
-		//newObj.transform.localScale = new Vector3 (resolution, resolution, resolution);
-
 		Profiler.EndSample ();
+
 		return newObj;
-
-		/*
-		if (doubleSided) {
-			List<int> reverseTris = new List<int>();
-			for (int i = 0; i < tris.Count; i += 3) {
-				reverseTris.Add (tris [i]);
-				reverseTris.Add (tris [i + 2]);
-				reverseTris.Add (tris [i + 1]);
-			}
-
-			Mesh mesh2 = new Mesh ();
-			mesh2.vertices = verts.ToArray ();
-			mesh2.triangles = reverseTris.ToArray();
-			mesh2.RecalculateNormals();
-
-			GameObject newObj2 = new GameObject ();
-			newObj2.AddComponent<MeshFilter> ();
-			newObj2.AddComponent<MeshRenderer> ();
-			newObj2.AddComponent<MeshCollider> ();
-
-			newObj2.GetComponent<MeshFilter> ().mesh = mesh2;
-			newObj2.GetComponent<MeshRenderer> ().material = new Material(Shader.Find("Diffuse"));
-			newObj2.GetComponent<MeshCollider>().sharedMesh = mesh2; 
-
-			newObj2.transform.position = new Vector3(position.z * size, position.y * size, position.x * size) -
-				new Vector3(size / 2, size / 2, size / 2);
-			//newObj2.transform.localScale = new Vector3 (resolution, resolution, resolution);
-		}
-		*/
 	}
 
 	/**
@@ -280,14 +193,11 @@ public class Generator : MonoBehaviour {
 
 		if (unfinishedObj == null) { return; }
 		unfinishedObj.GetComponent<MeshCollider>().sharedMesh = mesh; 
-		//unfinishedObj.GetComponent<MeshCollider>().
 	}
 
-	public static IEnumerator generateAsync(Vector3 position, GameObject unfinishedObj, bool doubleSided=false) {
-		
+	public static IEnumerator generateAsync(Vector3 position, GameObject unfinishedObj) {
 		if (unfinishedObj != null) {
 			unfinishedObj.transform.position = new Vector3 (position.z * size, position.y * size, position.x * size) - meshOffset;
-			//unfinishedObj.name = "(" + position.x + " ," + position.y + " ," + position.z + ")";
 		}
 		yield return null;
 
@@ -341,7 +251,6 @@ public class Generator : MonoBehaviour {
 	}
 
 	public static void shiftArray(Direction dir) {
-		//Debug.Log("Shift array called "  + x + ", " + y + ", " + z);
 		chunks.shift (dir);
 	}
 
