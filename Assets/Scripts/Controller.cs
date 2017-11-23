@@ -177,14 +177,14 @@ public class Controller : MonoBehaviour {
 		mainCamera.transform.rotation = newRotation;
 
 		// Above / underground transition
-		if (mainCamera.transform.position.y > 0) {
-			mainCamera.backgroundColor = skyColor;
-			RenderSettings.fog = false;
-		} else {
-			mainCamera.backgroundColor = caveColor;
-			RenderSettings.fog = true;
-			RenderSettings.fogDensity = (mainCamera.transform.position.y / -10.0f) * 0.1f;
-		}
+//		if (mainCamera.transform.position.y > 0) {
+//			mainCamera.backgroundColor = skyColor;
+//			RenderSettings.fog = false;
+//		} else {
+//			mainCamera.backgroundColor = caveColor;
+//			RenderSettings.fog = true;
+//			RenderSettings.fogDensity = (mainCamera.transform.position.y / -10.0f) * 0.1f;
+//		}
 
 		#region Generate Terrain
 
@@ -218,7 +218,7 @@ public class Controller : MonoBehaviour {
 			movementDir = Direction.FRONT;
 		}
 
-		if (zChunk < 0 && movementDir != Direction.NONE) {
+		if (movementDir != Direction.NONE) {
 			Generator.shiftArray(movementDir);
 			int[] regenerateIndices = CubeBuffer.faceIndices[(int)movementDir];
 			for (int i = 0; i < regenerateIndices.Length; i++) {
@@ -228,9 +228,9 @@ public class Controller : MonoBehaviour {
 				int newY = -Generator.renderRadius + yChunk + pos.y;
 				int newZ = -Generator.renderRadius + zChunk + pos.z;
 
-				if (newY >= 0) {
-					continue;
-				}
+				//if (newY >= 0) {
+				//	continue;
+				//}
 
 				Vector3Int genPos = new Vector3Int(newZ, newY, newX);
 				//Vector3Int genPosSwapped = new Vector3Int(newX, newY, newZ);
