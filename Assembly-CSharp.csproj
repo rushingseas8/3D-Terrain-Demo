@@ -91,12 +91,18 @@
      <Compile Include="Assets\MarchingCubes\Marching\MarchingCubes.cs" />
      <Compile Include="Assets\MarchingCubes\Marching\MarchingTertahedron.cs" />
      <Compile Include="Assets\Scripts\Controller.cs" />
-     <Compile Include="Assets\Scripts\CubeBuffer.cs" />
-     <Compile Include="Assets\Scripts\CubeStorage.cs" />
+     <Compile Include="Assets\Scripts\DataStructures\CubeBuffer.cs" />
+     <Compile Include="Assets\Scripts\DataStructures\CubeStorage.cs" />
+     <Compile Include="Assets\Scripts\DataStructures\SquareBuffer.cs" />
      <Compile Include="Assets\Scripts\GameManager.cs" />
-     <Compile Include="Assets\Scripts\Generator.cs" />
+     <Compile Include="Assets\Scripts\Generators\GenerateTerrain.cs" />
+     <Compile Include="Assets\Scripts\Generators\Generator2D.cs" />
+     <Compile Include="Assets\Scripts\Generators\GeneratorBase.cs" />
+     <Compile Include="Assets\Scripts\Generators\GeneratorCave.cs" />
      <Compile Include="Assets\Scripts\Helper.cs" />
      <Compile Include="Assets\SimplexNoise\SimplexNoise.cs" />
+     <None Include="Assets\Resources\Materials\HeightShader.shader" />
+     <None Include="Assets\Shaders\WaterShader_v2.shader" />
  <Reference Include="UnityEngine.UI">
  <HintPath>/Applications/Unity/Unity.app/Contents/UnityExtensions/Unity/GUISystem/UnityEngine.UI.dll</HintPath>
  </Reference>

@@ -8,7 +8,9 @@ using System.Runtime.InteropServices;
 using LibNoise.Generator;
 
 public class GameManager : MonoBehaviour {
-	
+
+	public static bool twoDMode = true;
+
 	//private bool[,,] data;
 	private bool[] data;
 	private Vector3[] dataVec;
@@ -68,7 +70,13 @@ public class GameManager : MonoBehaviour {
 		}
 		*/
 
-		Generator.generate ();
+		if (twoDMode) {
+			//GenerateTerrain.generate ();
+			Generator2D.generate();
+		} else {
+			GameObject.Destroy (GameObject.Find ("Sun"));
+			GeneratorCave.generate ();
+		}
 	}
 
 	/*

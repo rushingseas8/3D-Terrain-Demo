@@ -9,7 +9,10 @@ using System.Runtime.InteropServices;
 using LibNoise.Generator;
 using MarchingCubesProject;
 
-public class Generator : MonoBehaviour {
+public class GeneratorCave : GeneratorBase {
+
+	//private static RidgedMultifractal noiseGen;
+	private static float marchingSurface = -0.8f;
 
 	// How large is each mesh, in points?
 	public static int size = 8;
@@ -21,12 +24,6 @@ public class Generator : MonoBehaviour {
 
 	// By how much should each mesh be offset by default? This is to center it around the player.
 	private static Vector3 meshOffset;
-
-	// The material we assign to the cave meshes.
-	private static Material defaultMaterial;
-
-	// The physics material we assign to the cave meshes.
-	private static PhysicMaterial defaultPhysics;
 
 	/*
 	 * A 3D array of GameObjects representing the currently loaded cave meshes.
@@ -42,7 +39,7 @@ public class Generator : MonoBehaviour {
 	// How many meshes should we load at once? The radius is how many meshes are drawn in every
 	// direction, plus one for the center. The diameter, N, is how large of an NxNxN cube is 
 	// centered around the player.
-	public static int renderRadius = 3;
+	public static int renderRadius = 2;
 	public static int renderDiameter = (renderRadius * 2) + 1;
 
 	// How strong is the fog? Calculated from renderRadius and size.
@@ -61,10 +58,14 @@ public class Generator : MonoBehaviour {
 	private const int DEFAULT_TRI_BUFFER_SIZE = 1750;		// Minimum 1650.
 
 	// An offset for the terrain gen.
-	//private static Vector3 GEN_OFFSET = new Vector3 (1023, 1942, 7777);
-	private static Vector3 GEN_OFFSET = Vector3.zero;
+	private static Vector3 GEN_OFFSET = new Vector3 (1023, 1942, 7777);
+	//private static Vector3 GEN_OFFSET = Vector3.zero;
 
-	static Generator() {
+	static GeneratorCave() {
+		//noiseGen = new RidgedMultifractal ();
+		//noiseGen.Lacunarity = 2.5f;
+		//noiseGen.Frequency = 1.0f;
+
 		meshOffset = new Vector3 (size / 2, size / 2, size / 2); // Centered on the player; endless caves
 		//meshOffset = new Vector3 (size / 2, 0, size / 2); // Centered on the player on the x/z plane
 
@@ -134,6 +135,7 @@ public class Generator : MonoBehaviour {
 			for (int j = 0; j < sp1; j++) {
 				for (int k = 0; k < sp1; k++) {
 					data [count++] = (float) -GetValue(offset.x + (i / scale), offset.y + (j / scale), offset.z + (k / scale));
+					//data [count++] = (float) -noiseGen.GetValue(offset.x + (i / scale), offset.y + (j / scale), offset.z + (k / scale));
 				}
 			}
 		}
@@ -151,7 +153,7 @@ public class Generator : MonoBehaviour {
 
 		Profiler.BeginSample("Marching cubes");
 		Marching marching = new MarchingCubes ();
-		marching.Surface = 0f;
+		marching.Surface = marchingSurface;
 
 		marching.Generate(data, size + 1, size + 1, size + 1, verts, tris);
 		Profiler.EndSample ();
@@ -164,35 +166,6 @@ public class Generator : MonoBehaviour {
 		Profiler.EndSample ();
 
 		return newObj;
-	}
-
-	/**
-	 * Return immediately if "unfinishedObj" is destroyed before this method can finish.
-	 */
-	private static void assignMesh(GameObject unfinishedObj, Vector3[] vertices, int[] triangles) {
-		if (unfinishedObj == null) { return; }
-		Mesh mesh = new Mesh ();
-		mesh.vertices = vertices;
-		mesh.triangles = triangles;
-
-		Vector2[] uvs = new Vector2[vertices.Length];
-		for (int i = 0; i < uvs.Length; i += 3) {
-			uvs [i + 0] = new Vector2(0, 0);
-			uvs [i + 1] = new Vector2(1, 0);
-			uvs [i + 2] = new Vector2(1, 1);
-		}
-		mesh.uv = uvs;
-		
-		mesh.RecalculateNormals ();
-
-		if (unfinishedObj == null) { return; }
-		unfinishedObj.GetComponent<MeshFilter> ().mesh = mesh;
-
-		if (unfinishedObj == null) { return; }
-		unfinishedObj.GetComponent<MeshRenderer> ().material = defaultMaterial;
-
-		if (unfinishedObj == null) { return; }
-		unfinishedObj.GetComponent<MeshCollider>().sharedMesh = mesh; 
 	}
 
 	public static IEnumerator generateAsync(Vector3 position, GameObject unfinishedObj) {
@@ -228,7 +201,7 @@ public class Generator : MonoBehaviour {
 		List<int> tris = new List<int> (DEFAULT_TRI_BUFFER_SIZE);
 
 		Marching marching = new MarchingCubes ();
-		marching.Surface = 0f;
+		marching.Surface = marchingSurface;
 
 		marching.Generate(data, sp1, sp1, sp1, verts, tris);
 		yield return null;
@@ -237,17 +210,6 @@ public class Generator : MonoBehaviour {
 
 		assignMesh (unfinishedObj, verts.ToArray (), tris.ToArray ());
 		yield return null;
-	}
-
-	public static GameObject generateEmpty() {
-		GameObject newObj = new GameObject ();
-
-		newObj.AddComponent<MeshFilter> ();
-		newObj.AddComponent<MeshRenderer> ();
-		newObj.AddComponent<MeshCollider> ();
-
-		newObj.GetComponent<MeshRenderer> ().material = defaultMaterial;
-		return newObj;
 	}
 
 	public static void shiftArray(Direction dir) {

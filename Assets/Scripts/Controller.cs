@@ -177,79 +177,90 @@ public class Controller : MonoBehaviour {
 			thirdPersonDistance = 0;
 		#endregion
 
-		#region Generate Terrain
+		if (GameManager.twoDMode) {
+			int newXChunk = (int)(transform.position.x / GeneratorCave.size);
+			int newZChunk = (int)(transform.position.z / GeneratorCave.size);
 
-		// TODO: make the range (-Size, 0) count as chunk -1, rather than its current 0
-		int newXChunk = (int)(transform.position.x / Generator.size);
-		int newYChunk = (int)(transform.position.y / Generator.size);
-		int newZChunk = (int)(transform.position.z / Generator.size);
 
-		Direction movementDir = Direction.NONE;
+		} else {
+
+			#region Generate Terrain
+
+			// TODO: make the range (-Size, 0) count as chunk -1, rather than its current 0
+			int newXChunk = (int)(transform.position.x / GeneratorCave.size);
+			int newYChunk = (int)(transform.position.y / GeneratorCave.size);
+			int newZChunk = (int)(transform.position.z / GeneratorCave.size);
+
+			Direction movementDir = Direction.NONE;
 	
-		if (newXChunk < xChunk) {		
-			xChunk = newXChunk;
-			movementDir = Direction.LEFT;
-		} else if (newXChunk > xChunk) {
-			xChunk = newXChunk;
-			movementDir = Direction.RIGHT;
-		} else if (newYChunk < yChunk) {
-			yChunk = newYChunk;
-			movementDir = Direction.DOWN;
-		} else if (newYChunk > yChunk) {
-			yChunk = newYChunk;
-			movementDir = Direction.UP;
-		}
-		else if (newZChunk < zChunk) {
-			zChunk = newZChunk;
-			movementDir = Direction.BACK;
-		} else if (newZChunk > zChunk) {
-			zChunk = newZChunk;
-			movementDir = Direction.FRONT;
-		}
+			if (newXChunk < xChunk) {		
+				xChunk = newXChunk;
+				movementDir = Direction.LEFT;
+			} else if (newXChunk > xChunk) {
+				xChunk = newXChunk;
+				movementDir = Direction.RIGHT;
+			} else if (newYChunk < yChunk) {
+				yChunk = newYChunk;
+				movementDir = Direction.DOWN;
+			} else if (newYChunk > yChunk) {
+				yChunk = newYChunk;
+				movementDir = Direction.UP;
+			} 
+			/*
+			else if (newZChunk < zChunk) {
+				zChunk = newZChunk;
+				movementDir = Direction.BACK;
+			} else if (newZChunk > zChunk) {
+				zChunk = newZChunk;
+				movementDir = Direction.FRONT;
+			}
+			*/
 
-		if (movementDir != Direction.NONE) {
-			Generator.shiftArray(movementDir);
-			int[] regenerateIndices = CubeBuffer.faceIndices[(int)movementDir];
-			for (int i = 0; i < regenerateIndices.Length; i++) {
-				Vector3Int pos = Helper.indexToCoords(Generator.renderDiameter, regenerateIndices[i]);
+			if (movementDir != Direction.NONE) {
+				GeneratorCave.shiftArray (movementDir);
+				int[] regenerateIndices = CubeBuffer.faceIndices [(int)movementDir];
+				for (int i = 0; i < regenerateIndices.Length; i++) {
+					Vector3Int pos = Helper.indexToCoords (GeneratorCave.renderDiameter, regenerateIndices [i]);
 
-				int newX = -Generator.renderRadius + xChunk + pos.x;
-				int newY = -Generator.renderRadius + yChunk + pos.y;
-				int newZ = -Generator.renderRadius + zChunk + pos.z;
+					int newX = -GeneratorCave.renderRadius + xChunk + pos.x;
+					int newY = -GeneratorCave.renderRadius + yChunk + pos.y;
+					int newZ = -GeneratorCave.renderRadius + zChunk + pos.z;
 
-				Vector3Int genPos = new Vector3Int(newZ, newY, newX);
+					Vector3Int genPos = new Vector3Int (newZ, newY, newX);
 
-				// Try to find the given cave chunk in the cache, first.
-				if (Generator.chunkCache.ContainsKey(genPos)) {
-					// If we find it, then "generate" that chunk in the cube buffer, and activate it.
-					GameObject cachedGO = Generator.chunkCache[genPos];
+					// Try to find the given cave chunk in the cache, first.
+					if (GeneratorCave.chunkCache.ContainsKey (genPos)) {
+						// If we find it, then "generate" that chunk in the cube buffer, and activate it.
+						GameObject cachedGO = GeneratorCave.chunkCache [genPos];
 
-					Generator.chunks[regenerateIndices[i]] = cachedGO;
-					cachedGO.SetActive(true);
-				} else {
-					// If we don't find it, then actually regenerate the mesh asyncronously. 
-					GameObject shell = Generator.generateEmpty();
-					Generator.chunks[regenerateIndices[i]] = shell;
-					Generator.chunkCache[genPos] = shell;
-					StartCoroutine(Generator.generateAsync(genPos, shell));
+						GeneratorCave.chunks [regenerateIndices [i]] = cachedGO;
+						cachedGO.SetActive (true);
+					} else {
+						// If we don't find it, then actually regenerate the mesh asyncronously. 
+						GameObject shell = GeneratorBase.generateEmpty ();
+						GeneratorCave.chunks [regenerateIndices [i]] = shell;
+						GeneratorCave.chunkCache [genPos] = shell;
+						StartCoroutine (GeneratorCave.generateAsync (genPos, shell));
+					}
 				}
 			}
-		}
 
-		#endregion
+			#endregion
 
-		// Above / underground transition
-		if (mainCamera.transform.position.y > fogMin) {
-			mainCamera.backgroundColor = skyColor;
-			RenderSettings.fog = false;
-		} else {
-			/*
-			float fogFactor = mainCamera.transform.position.y / fogMax;
+			#region Underground fog
+			// Above / underground transition
+			if (mainCamera.transform.position.y > fogMin) {
+				mainCamera.backgroundColor = skyColor;
+				RenderSettings.fog = false;
+			} else {
+				float fogFactor = mainCamera.transform.position.y / fogMax;
 
-			RenderSettings.fog = true;
-			RenderSettings.fogDensity = fogFactor * Generator.fogStrength;
-			mainCamera.backgroundColor = Color.Lerp(skyColor, caveColor, fogFactor);
-			*/
+				RenderSettings.fog = true;
+				RenderSettings.fogDensity = fogFactor * GeneratorCave.fogStrength;
+				mainCamera.backgroundColor = Color.Lerp(skyColor, caveColor, fogFactor);
+			}
+			#endregion
+
 		}
 
 		// Update velocity

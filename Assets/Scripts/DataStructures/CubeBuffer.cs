@@ -31,17 +31,17 @@ public class CubeBuffer {
 							//Debug.Log ("Right index: " + Helper.coordsToIndex (size, size - 1, i, j));
 							faceIndices [enumCount] [count++] = Helper.coordsToIndex (size, size - 1, i, j);
 							break;
-						case Direction.DOWN:
-							faceIndices [enumCount] [count++] = Helper.coordsToIndex (size, i, 0, j);
-							break;
-						case Direction.UP:
-							faceIndices [enumCount] [count++] = Helper.coordsToIndex (size, i, size - 1, j);
-							break;
 						case Direction.BACK:
 							faceIndices [enumCount] [count++] = Helper.coordsToIndex (size, i, j, 0);
 							break;
 						case Direction.FRONT:
 							faceIndices [enumCount] [count++] = Helper.coordsToIndex (size, i, j, size - 1);
+							break;
+						case Direction.DOWN:
+							faceIndices [enumCount] [count++] = Helper.coordsToIndex (size, i, 0, j);
+							break;
+						case Direction.UP:
+							faceIndices [enumCount] [count++] = Helper.coordsToIndex (size, i, size - 1, j);
 							break;
 					}
 				}

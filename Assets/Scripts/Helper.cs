@@ -9,10 +9,10 @@ using UnityEngine;
 public enum Direction {
 	LEFT = 0,
 	RIGHT = 1,
-	UP = 2,
-	DOWN = 3,
-	FRONT = 4,
-	BACK = 5,
+	FRONT = 2,
+	BACK = 3,
+	UP = 4,
+	DOWN = 5,
 	NONE = -1
 }
 
