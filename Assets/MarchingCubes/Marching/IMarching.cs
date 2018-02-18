@@ -9,7 +9,7 @@ namespace MarchingCubesProject
     public interface IMarching
     {
 
-        float Surface { get; set; }
+        //float Surface { get; set; }
 
 		void Generate(float[] voxels, int width, int height, int depth, IList<Vector3> verts, IList<int> indices);
 

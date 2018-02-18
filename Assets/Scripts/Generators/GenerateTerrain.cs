@@ -5,7 +5,7 @@ using UnityEngine;
 /**
  * 2D terrain generation on the surface. 
  */
-public class GenerateTerrain : GeneratorBase {
+public class GenerateTerrain : Generator {
 
 	// How many points do we generate per mesh?
 	public static int size = 64;

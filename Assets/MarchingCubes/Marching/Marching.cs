@@ -11,14 +11,18 @@ namespace MarchingCubesProject
     public abstract class Marching : IMarching
     {
 
-        public float Surface { get; set; }
+        //public float Surface { get; set; }
 
-        private float[] Cube { get; set; }
+        //private float[] Cube { get; set; }
+
+		public float Surface;
+		private float[] Cube;
 
         /// <summary>
         /// Winding order of triangles use 2,1,0 or 0,1,2
         /// </summary>
-        protected int[] WindingOrder { get; private set; }
+        //protected int[] WindingOrder { get; private set; }
+		protected int[] WindingOrder;
 
         public Marching(float surface = 0.5f)
         {

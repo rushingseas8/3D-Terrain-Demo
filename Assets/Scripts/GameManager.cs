@@ -1,6 +1,7 @@
 ﻿using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.Profiling;
 
 using System;
 using System.Runtime.InteropServices;
@@ -17,6 +18,8 @@ public class GameManager : MonoBehaviour {
 
 	// Use this for initialization
 	void Start () {
+		
+		//TextureManager.initialize ();
 
 		/*
 		int length = 10;
@@ -71,11 +74,10 @@ public class GameManager : MonoBehaviour {
 		*/
 
 		if (twoDMode) {
-			//GenerateTerrain.generate ();
-			Generator2D.generate();
+			Generator.generate (Generator.Generate2D);
 		} else {
 			GameObject.Destroy (GameObject.Find ("Sun"));
-			GeneratorCave.generate ();
+			Generator.generate (Generator.GenerateCave);
 		}
 	}
 

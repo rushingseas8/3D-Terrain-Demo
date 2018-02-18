@@ -43,9 +43,9 @@ public class Controller : MonoBehaviour {
 
 	// Keeps track of our global chunk position. This is used to generate and store the
 	// terrain around the player, and apply reloading logic as necessary. 
-	private static int xChunk = 0;
-	private static int yChunk = 0;
-	private static int zChunk = 0;
+	public static int xChunk = 0;
+	public static int yChunk = 0;
+	public static int zChunk = 0;
 
 	// The default background color used for the camera. "caveColor" is black so that
 	// we can cleanly hide the unloaded chunks in the distance underground.
@@ -53,7 +53,7 @@ public class Controller : MonoBehaviour {
 	private static Color caveColor = new Color (0, 0, 0);
 
 	void Start () {
-		up = new KeyCode[]{ /*KeyCode.Q,*/ KeyCode.LeftShift, KeyCode.Space };
+		up = new KeyCode[]{ KeyCode.Q, KeyCode.LeftShift, KeyCode.Space };
 		down = new KeyCode[]{ KeyCode.E, KeyCode.LeftControl, KeyCode.LeftAlt };
 
 		mainCamera = Camera.main;
@@ -150,6 +150,7 @@ public class Controller : MonoBehaviour {
 		}
 		#endregion
 
+		/*
 		#region Torch throwing
 		if (Input.GetKeyDown (KeyCode.Q)) {
 			GameObject newTorch = GameObject.Instantiate(Resources.Load ("Prefabs/Torch") as GameObject);
@@ -157,6 +158,7 @@ public class Controller : MonoBehaviour {
 			newTorch.GetComponent<Rigidbody>().AddForceAtPosition(mainCamera.transform.rotation * Vector3.forward * 100f, (Vector3.up));
 		}
 		#endregion
+		*/
 
 		#region Mouse movement
 		float mouseX = Input.GetAxis ("Mouse X");
@@ -178,12 +180,72 @@ public class Controller : MonoBehaviour {
 		#endregion
 
 		if (GameManager.twoDMode) {
-			int newXChunk = (int)(transform.position.x / GeneratorCave.size);
-			int newZChunk = (int)(transform.position.z / GeneratorCave.size);
+			int newXChunk = (int)(transform.position.x / Generator.size);
+			int newYChunk = (int)(transform.position.y / Generator.size);
+			int newZChunk = (int)(transform.position.z / Generator.size);
 
+			Direction movementDir = Direction.NONE;
+
+			if (newXChunk < xChunk) {		
+				xChunk = newXChunk;
+				movementDir = Direction.LEFT;
+			} else if (newXChunk > xChunk) {
+				xChunk = newXChunk;
+				movementDir = Direction.RIGHT;
+			} else if (newYChunk < yChunk) {
+				yChunk = newYChunk;
+				movementDir = Direction.DOWN;
+			} else if (newYChunk > yChunk) {
+				yChunk = newYChunk;
+				movementDir = Direction.UP;
+			} else if (newZChunk < zChunk) {
+				zChunk = newZChunk;
+				movementDir = Direction.BACK;
+			} else if (newZChunk > zChunk) {
+				zChunk = newZChunk;
+				movementDir = Direction.FRONT;
+			}
+
+			if (movementDir != Direction.NONE) {
+				Generator.shiftArray (movementDir);
+				int[] regenerateIndices = CubeBuffer<GameObject>.faceIndices [(int)movementDir];
+				for (int i = 0; i < regenerateIndices.Length; i++) {
+					Vector3Int pos = Helper.indexToCoords (Generator.renderDiameter, regenerateIndices [i]);
+
+					int newX = -Generator.renderRadius + xChunk + pos.x;
+					int newY = -Generator.renderRadius + yChunk + pos.y;
+					int newZ = -Generator.renderRadius + zChunk + pos.z;
+
+					Vector3Int genPos = new Vector3Int (newZ, newY, newX);
+
+					// Try to find the given cave chunk in the cache, first.
+					if (Generator.chunkCache.ContainsKey (genPos)) {
+						// If we find it, then "generate" that chunk in the cube buffer, and activate it.
+						Chunk cachedChunk = Generator.chunkCache [genPos];
+
+						Generator.chunks [regenerateIndices [i]] = cachedChunk;
+						cachedChunk.obj.SetActive (true);
+					} else {
+						// If we don't find it, then actually regenerate the mesh asyncronously. 
+
+						GameObject shell = Generator.generateEmpty ();
+						Chunk chunkShell = new Chunk (genPos, shell);
+						Generator.chunks [regenerateIndices [i]] = chunkShell;
+						Generator.chunkCache [genPos] = chunkShell;
+						StartCoroutine (Generator.Generate2DAsync (genPos, shell));
+
+						/*
+						GameObject obj = Generator.generateObj (genPos, Generator.Generate2D);
+						Generator.chunks [regenerateIndices [i]] = obj;
+						Generator.chunkCache [genPos] = obj;
+						*/
+
+					}
+				}
+			}
 
 		} else {
-
+			/*
 			#region Generate Terrain
 
 			// TODO: make the range (-Size, 0) count as chunk -1, rather than its current 0
@@ -206,7 +268,6 @@ public class Controller : MonoBehaviour {
 				yChunk = newYChunk;
 				movementDir = Direction.UP;
 			} 
-			/*
 			else if (newZChunk < zChunk) {
 				zChunk = newZChunk;
 				movementDir = Direction.BACK;
@@ -214,7 +275,6 @@ public class Controller : MonoBehaviour {
 				zChunk = newZChunk;
 				movementDir = Direction.FRONT;
 			}
-			*/
 
 			if (movementDir != Direction.NONE) {
 				GeneratorCave.shiftArray (movementDir);
@@ -237,7 +297,7 @@ public class Controller : MonoBehaviour {
 						cachedGO.SetActive (true);
 					} else {
 						// If we don't find it, then actually regenerate the mesh asyncronously. 
-						GameObject shell = GeneratorBase.generateEmpty ();
+						GameObject shell = Generator.generateEmpty ();
 						GeneratorCave.chunks [regenerateIndices [i]] = shell;
 						GeneratorCave.chunkCache [genPos] = shell;
 						StartCoroutine (GeneratorCave.generateAsync (genPos, shell));
@@ -260,7 +320,7 @@ public class Controller : MonoBehaviour {
 				mainCamera.backgroundColor = Color.Lerp(skyColor, caveColor, fogFactor);
 			}
 			#endregion
-
+			*/
 		}
 
 		// Update velocity

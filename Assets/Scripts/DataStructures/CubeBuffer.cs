@@ -3,16 +3,16 @@ using System.Collections.Generic;
 using UnityEngine;
 using System;
 
-public class CubeBuffer {
+public class CubeBuffer<T> {
 
 	private int size;
-	private GameObject[,,] cube;
+	private T[,,] cube;
 
 	public static int[][] faceIndices;
 
 	public CubeBuffer (int size) {
 		this.size = size;
-		cube = new GameObject[size, size, size];
+		cube = new T[size, size, size];
 
 		// O(size^2), but run only once per game, so not too bad
 		int enumLength = Enum.GetValues (typeof(Direction)).Length;
@@ -50,13 +50,13 @@ public class CubeBuffer {
 	}
 
 	// Access using the combined index
-	public GameObject this[int index] {
+	public T this[int index] {
 		get { return cube[(index / size / size) % size, (index / size) % size, index % size]; }
 		set { cube[(index / size / size) % size, (index / size) % size, index % size] = value; }
 	}
 
 	// Access using x,y,z 
-	public GameObject this[int x, int y, int z] {
+	public T this[int x, int y, int z] {
 		get { return cube [x, y, z]; }
 		set { cube [x, y, z] = value; }
 	}
@@ -71,10 +71,15 @@ public class CubeBuffer {
 			//GameObject.Destroy (cube [pos.x, pos.y, pos.z]);
 			//Debug.Log("Deactivating " + indices[i] + ".");
 			//if (cube [pos.x, pos.y, pos.z] != null) {
-				cube [pos.x, pos.y, pos.z].SetActive (false);
+			if (typeof(GameObject) == typeof(T)) {
+				(cube [pos.x, pos.y, pos.z] as GameObject).SetActive (false);
+			}
+			if (typeof(Chunk) == typeof(T)) {
+				(cube [pos.x, pos.y, pos.z] as Chunk).obj.SetActive (false);
+			}
 			//}
 			
-			cube [pos.x, pos.y, pos.z] = null;
+			cube [pos.x, pos.y, pos.z] = default(T);
 		}
 	}
 

@@ -11,7 +11,8 @@ namespace MarchingCubesProject
     public class MarchingCubes : Marching
     {
 
-        private Vector3[] EdgeVertex { get; set; }
+        //private Vector3[] EdgeVertex { get; set; }
+		private Vector3[] EdgeVertex;
 
         public MarchingCubes(float surface = 0.5f) : base(surface)
         {
@@ -23,23 +24,41 @@ namespace MarchingCubesProject
         /// </summary>
         protected override void March(float x, float y, float z, float[] cube, IList<Vector3> vertList, IList<int> indexList)
         {
-			//Profiler.BeginSample ("March setup");
+			Profiler.BeginSample ("March setup");
             int i, j, vert, idx;
             int flagIndex = 0;
             float offset = 0.0f;
 
             //Find which vertices are inside of the surface and which are outside
-            for (i = 0; i < 8; i++) if (cube[i] <= Surface) flagIndex |= 1 << i;
+            //for (i = 0; i < 8; i++) if (cube[i] <= Surface) flagIndex |= 1 << i;
 
+			if (cube [0] <= Surface)
+				flagIndex |= 1;
+			if (cube [1] <= Surface)
+				flagIndex |= 2;
+			if (cube [2] <= Surface)
+				flagIndex |= 4;
+			if (cube [3] <= Surface)
+				flagIndex |= 8;
+			if (cube [4] <= Surface)
+				flagIndex |= 16;
+			if (cube [5] <= Surface)
+				flagIndex |= 32;
+			if (cube [6] <= Surface)
+				flagIndex |= 64;
+			if (cube [7] <= Surface)
+				flagIndex |= 128;
+				
             //Find which edges are intersected by the surface
             int edgeFlags = CubeEdgeFlags[flagIndex];
 
+			Profiler.EndSample ();
+
             //If the cube is entirely inside or outside of the surface, then there will be no intersections
-            if (edgeFlags == 0) return;
+			if (edgeFlags == 0) { return; }
 
-			//Profiler.EndSample ();
 
-			//Profiler.BeginSample ("March intersection");
+			Profiler.BeginSample ("March intersection");
             //Find the point of intersection of the surface with each edge
             for (i = 0; i < 12; i++)
             {
@@ -53,9 +72,9 @@ namespace MarchingCubesProject
                     EdgeVertex[i].z = z + (VertexOffset[EdgeConnection[i, 0], 2] + offset * EdgeDirection[i, 2]);
                 }
             }
-			//Profiler.EndSample ();
+			Profiler.EndSample ();
 
-			//Profiler.BeginSample ("March triangles");
+			Profiler.BeginSample ("March triangles");
             //Save the triangles that were found. There can be up to five per cube
             for (i = 0; i < 15; i+=3)
             {
@@ -70,7 +89,7 @@ namespace MarchingCubesProject
                     vertList.Add(EdgeVertex[vert]);
                 }
 			}
-			//Profiler.EndSample ();
+			Profiler.EndSample ();
         }
 
         /// <summary>
