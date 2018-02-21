@@ -68,16 +68,12 @@ public class CubeBuffer<T> {
 		for (int i = 0; i < indices.Length; i++) {
 			Vector3Int pos = Helper.indexToCoords (size, indices[i]);
 
-			//GameObject.Destroy (cube [pos.x, pos.y, pos.z]);
-			//Debug.Log("Deactivating " + indices[i] + ".");
-			//if (cube [pos.x, pos.y, pos.z] != null) {
 			if (typeof(GameObject) == typeof(T)) {
 				(cube [pos.x, pos.y, pos.z] as GameObject).SetActive (false);
 			}
 			if (typeof(Chunk) == typeof(T)) {
 				(cube [pos.x, pos.y, pos.z] as Chunk).obj.SetActive (false);
 			}
-			//}
 			
 			cube [pos.x, pos.y, pos.z] = default(T);
 		}

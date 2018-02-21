@@ -47,6 +47,9 @@ public class Controller : MonoBehaviour {
 	public static int yChunk = 0;
 	public static int zChunk = 0;
 
+	// What is the initial position of the player? Used to zero out chunk coordinates.
+	private Vector3 initialPosition;
+
 	// The default background color used for the camera. "caveColor" is black so that
 	// we can cleanly hide the unloaded chunks in the distance underground.
 	private static Color skyColor = new Color (49 / 255f, 77 / 255f, 121 / 255f);
@@ -57,6 +60,7 @@ public class Controller : MonoBehaviour {
 		down = new KeyCode[]{ KeyCode.E, KeyCode.LeftControl, KeyCode.LeftAlt };
 
 		mainCamera = Camera.main;
+		initialPosition = transform.position;
 
 		if (cursorLocked) {
 			Cursor.lockState = CursorLockMode.Locked;
@@ -180,9 +184,9 @@ public class Controller : MonoBehaviour {
 		#endregion
 
 		if (GameManager.twoDMode) {
-			int newXChunk = (int)(transform.position.x / Generator.size);
-			int newYChunk = (int)(transform.position.y / Generator.size);
-			int newZChunk = (int)(transform.position.z / Generator.size);
+			int newXChunk = (int)((transform.position.x - initialPosition.x) / Generator.size);
+			int newYChunk = (int)((transform.position.y - initialPosition.y) / Generator.size);
+			int newZChunk = (int)((transform.position.z -initialPosition.z) / Generator.size);
 
 			Direction movementDir = Direction.NONE;
 
@@ -207,8 +211,8 @@ public class Controller : MonoBehaviour {
 			}
 
 			if (movementDir != Direction.NONE) {
-				Generator.shiftArray (movementDir);
-				int[] regenerateIndices = CubeBuffer<GameObject>.faceIndices [(int)movementDir];
+				Generator.chunks.shift (movementDir);
+				int[] regenerateIndices = CubeBuffer<Chunk>.faceIndices [(int)movementDir];
 				for (int i = 0; i < regenerateIndices.Length; i++) {
 					Vector3Int pos = Helper.indexToCoords (Generator.renderDiameter, regenerateIndices [i]);
 

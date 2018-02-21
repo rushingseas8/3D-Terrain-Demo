@@ -8,14 +8,135 @@ public class OptimizedMarching {
 	private float[] Cube;
 	protected int[] WindingOrder;
 
+	private bool[] CubeBool;
+
 	// March data
 	private Vector3[] EdgeVertex;
 
 	public OptimizedMarching(float surface = 0.5f) {
 		Surface = surface;
 		Cube = new float[8];
+		CubeBool = new bool[8];
 		WindingOrder = new int[] { 0, 1, 2 };
 		EdgeVertex = new Vector3[12];
+	}
+
+	public void GenerateBool(bool[] voxels, int width, int height, int depth, IList<Vector3> verts, IList<int> indices) {
+		if (Surface > 0.0f) {
+			WindingOrder[0] = 0;
+			WindingOrder[1] = 1;
+			WindingOrder[2] = 2;
+		} else {
+			WindingOrder[0] = 2;
+			WindingOrder[1] = 1;
+			WindingOrder[2] = 0;
+		}
+
+		int x, y, z;
+		int wh = width * height;
+
+		int[] yw = new int[height];
+		for (int i = 0; i < height; i++) { yw [i] = i * width; }
+
+		int[] zwh = new int[depth];
+		for (int i = 0; i < depth; i++) { zwh [i] = i * wh; }
+
+		for (x = 0; x < width - 1; x++) {
+			for (y = 0; y < height - 1; y++) {
+				for (z = 0; z < depth - 1; z++) {
+					//Get the values in the 8 neighbours which make up a cube
+					//Profiler.BeginSample("Neighbor search");
+
+					int baseIndex = x + yw[y] + zwh[z];
+					int b1 = baseIndex + 1;
+					int b1w = b1 + width;
+					int bw = baseIndex + width;
+
+					CubeBool [0] = voxels[baseIndex];
+					CubeBool [1] = voxels[b1];
+					CubeBool [2] = voxels[b1w];
+					CubeBool [3] = voxels[bw];
+
+					CubeBool [4] = voxels[baseIndex + wh];
+					CubeBool [5] = voxels[b1 + wh];
+					CubeBool [6] = voxels[b1w + wh];
+					CubeBool [7] = voxels[bw + wh];
+
+					//Profiler.EndSample ();
+
+					//Perform algorithm
+					//Profiler.BeginSample("March");
+					//March(x, y, z, Cube, verts, indices);
+					//Profiler.EndSample ();
+
+					//Profiler.BeginSample ("March setup");
+
+					int i, j, vert, idx;
+					int flagIndex = 0;
+					float offset = 0.0f;
+
+					if (CubeBool [0])
+						flagIndex |= 1;
+					if (CubeBool [1])
+						flagIndex |= 2;
+					if (CubeBool [2])
+						flagIndex |= 4;
+					if (CubeBool [3])
+						flagIndex |= 8;
+					if (CubeBool [4])
+						flagIndex |= 16;
+					if (CubeBool [5])
+						flagIndex |= 32;
+					if (CubeBool [6])
+						flagIndex |= 64;
+					if (CubeBool [7])
+						flagIndex |= 128;
+
+					//Find which edges are intersected by the surface
+					int edgeFlags = CubeEdgeFlags[flagIndex];
+
+					//Profiler.EndSample ();
+
+					//If the cube is entirely inside or outside of the surface, then there will be no intersections
+					if (edgeFlags == 0) { continue; }
+
+
+					//Profiler.BeginSample ("March intersection");
+					//Find the point of intersection of the surface with each edge
+					for (i = 0; i < 12; i++)
+					{
+						//if there is an intersection on this edge
+						if ((edgeFlags & (1 << i)) != 0)
+						{
+							offset = GetOffsetBool(CubeBool[EdgeConnection[i, 0]], CubeBool[EdgeConnection[i, 1]]);
+
+							EdgeVertex[i].x = x + (VertexOffset[EdgeConnection[i, 0], 0] + offset * EdgeDirection[i, 0]);
+							EdgeVertex[i].y = y + (VertexOffset[EdgeConnection[i, 0], 1] + offset * EdgeDirection[i, 1]);
+							EdgeVertex[i].z = z + (VertexOffset[EdgeConnection[i, 0], 2] + offset * EdgeDirection[i, 2]);
+						}
+					}
+					//Profiler.EndSample ();
+
+					//Profiler.BeginSample ("March triangles");
+					//Save the triangles that were found. There can be up to five per cube
+					for (i = 0; i < 15; i+=3)
+					{
+						if (TriangleConnectionTable[flagIndex, i] < 0) break;
+
+						idx = verts.Count;
+
+						for (j = 0; j < 3; j++)
+						{
+							vert = TriangleConnectionTable[flagIndex, i + j];
+							indices.Add(idx + WindingOrder[j]);
+							verts.Add(EdgeVertex[vert]);
+						}
+					}
+					//Profiler.EndSample ();
+
+				}
+			}
+		}
 	}
 
 	public void Generate(float[] voxels, int width, int height, int depth, IList<Vector3> verts, IList<int> indices) {
@@ -213,6 +334,10 @@ public class OptimizedMarching {
 	{
 		float delta = v2 - v1;
 		return (delta == 0.0f) ? Surface : (Surface - v1) / delta;
+	}
+
+	private float GetOffsetBool(bool v1, bool v2) {
+		return v1 == v2 ? Surface : Surface - 1;
 	}
 
 	/// <summary>

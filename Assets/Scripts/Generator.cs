@@ -17,15 +17,15 @@ public class Generator : MonoBehaviour {
 	#region Data specific to each unique Generator
 
 	// How large is each mesh, in sample points/vertices?
-	public static int size = 8;
+	public static int size = 16;
 
 	// The scale multiplier on the perlin noise. Larger = more zoomed in, so less detailed features.
 	// Note that this shouldn't ever be 1.0 because of gradient noise being 0 at integer boundaries.
 	// If you want a scale of 1.0, try using 1.1 instead.
-	public static float scale = 8f; //16f;
+	public static float scale = 128f; //16f;
 
 	// The scale multiplier on height. Default 1.0f makes generated height 0-1 units.
-	public static float heightScale = 8.0f;
+	public static float heightScale = 32.0f;
 
 	// The number of vertices per unit length. 1.0 is default; 2.0 means you get a point every 0.5 units.
 	public static float precision = 1.0f;
@@ -38,7 +38,7 @@ public class Generator : MonoBehaviour {
 	 * the player is on; 1 = 1 chunk on every side; etc. Diameter is a calculated value with the
 	 * actual number of chunks rendered at a time, in any one axis direction.
 	 */
-	public static int renderRadius = 5;
+	public static int renderRadius = 2;
 	public static int renderDiameter = (renderRadius * 2) + 1;
 
 	// How strong is the fog? Calculated from renderRadius and size.
@@ -84,12 +84,13 @@ public class Generator : MonoBehaviour {
 	protected static PhysicMaterial defaultPhysics;
 
 	// Defining a delegate for the class of data generation functions
+	//public delegate float[] DataGenerator(Vector3 position);
 	public delegate float[] DataGenerator(Vector3 position);
 
 	#endregion
 
 
-	private static PerlinGenerator temperatureGenerator = new PerlinGenerator (0.0f, 0.0f, 2, 1.0f, 2.0f, 0.5f);
+	private static PerlinGenerator temperatureGenerator = new PerlinGenerator (0.0f, 0.0f, 12, 1.0f, 2.0f, 0.5f);
 
 	static Generator() {
 		//defaultMaterial = new Material(Shader.Find("Diffuse"));
@@ -113,6 +114,7 @@ public class Generator : MonoBehaviour {
 
 	/**
 	 * Creates an empty shell GameObject, ready to be passed into "assignMesh".
+	 * This shell needs its position and scale assigned later. Used internally by Generator.
 	 */
 	public static GameObject generateEmpty() {
 		Profiler.BeginSample ("Generate Empty");
@@ -130,9 +132,9 @@ public class Generator : MonoBehaviour {
 	/**
 	 * Creates a new mesh and assigns it to the empty gameobject provided.
 	 * Return immediately if "unfinishedObj" is destroyed before this method can finish,
-	 * which can happen if we do this asynchronously.
+	 * which can happen if we do this asynchronously. Used internally by Generator.
 	 */
-	public static void assignMesh(GameObject unfinishedObj, Vector3[] vertices, int[] triangles, Vector2[] uvs=null, Vector3[] normals=null) {
+	private static void assignMesh(GameObject unfinishedObj, Vector3[] vertices, int[] triangles, Vector2[] uvs=null, Vector3[] normals=null) {
 		if (unfinishedObj == null) { return; }
 
 		Mesh mesh = new Mesh ();
@@ -175,7 +177,12 @@ public class Generator : MonoBehaviour {
 		Profiler.EndSample ();
 	}
 
-	public static GameObject generateObj(Vector3 position, float[] data) {
+	/**
+	 * Generates a GameObject given a position in world coordinates, and an array with 3D
+	 * terrain data. Used internally by Generator. If you want to create chunks, you most
+	 * likely want the function "generateChunk".
+	 */
+	private static GameObject generateObj(Vector3 position, float[] data) {
 		Profiler.BeginSample ("GameObject generation");
 		GameObject newObj = generateEmpty ();
 		newObj.transform.position = new Vector3(position.z * size, position.y * size, position.x * size) - meshOffset;
@@ -201,53 +208,21 @@ public class Generator : MonoBehaviour {
 
 		return newObj;
 	}
-
-	public static Chunk generateChunk(Vector3 position, DataGenerator generate) {
-		Profiler.BeginSample("Vertex generation");
-		float[] data = generate (position);
-		Profiler.EndSample ();
-
-		return new Chunk (position, generateObj (position, data), data);
-	}
-
-	/**
-	 * Generates an initial region around the player. Called on game start.
-	 */
-	public static void generate(DataGenerator generator) {
-
-		Profiler.BeginSample ("Generate");
-		for (int i = -renderRadius; i <= renderRadius; i++) {
-			for (int j = -renderRadius; j <= renderRadius; j++) {
-				for (int k = -renderRadius; k <= renderRadius; k++) {
-					//GameObject newObj = generateObj (new Vector3 (i, j, k), generator);
-					Chunk newChunk = generateChunk(new Vector3(i, j, k), generator);
-
-					chunks [k + renderRadius, j + renderRadius, i + renderRadius] = newChunk;
-					chunkCache [new Vector3Int (i, j, k)] = newChunk;
-				}
-			}
-		}
-		Profiler.EndSample ();
-	}
-
-	/**
-	 * Shifts the chunk array in a certain direction. Used for regenerating in Controller.
-	 */
-	public static void shiftArray(Direction dir) {
-		chunks.shift (dir);
-	}
-
-	#region Generate2D
-
+		
+		
 	/**
 	 * Generates flat terrain on the surface level.
-	 * TODO: optimize me and make me O(n^2)
+	 * TODO: Rewrite manual normal calculation using actual noise data; this is a bit ugly looking
+	 * 
+	 * Maybe it's also a small error in the difference offsetting, but I'm honestly tired 
+	 * of that code by now; see around "float difference = ...".
 	 */
 	public static float[] Generate2D(Vector3 position) {
 		int numPoints = (int)(size * precision);
 
 		// We generate an extra vertex on each end to allow for seamless transitions.
 		int sp1 = numPoints + 1;
+		//float[] data = new float[sp1 * sp1 * sp1];
 		float[] data = new float[sp1 * sp1 * sp1];
 
 		// This scale value transforms "position" (in integer chunk coords) to actual
@@ -265,17 +240,68 @@ public class Generator : MonoBehaviour {
 		float noiseVal;
 		for (int x = 0; x < sp1; x++) {
 			for (int z = 0; z < sp1; z++) {
-				noise = heightScale * temperatureGenerator.getValue(offset.x + (x / scale / precision), offset.z + (z / scale / precision));
-				noiseVal = (noise / sp1) - position.y;
+				// Noise is the actual random noise. This should take into account temp/precip/etc.
+				noise = temperatureGenerator.getValue(offset.x + (x / scale / precision), offset.z + (z / scale / precision));
 
-				// Note: old code (easier to understand why these values are chosen)
-				// if ((((float)j / numPoints) + position.y) * sp1 < noise [(i * sp1) + k]) {
-				//     data [count] = 1 (else 0)
+				// Clamps the perlin noise. This may cut off some mountains.
+				//noise = Mathf.Clamp (noise, 0f, 1f); 
+
+				// Multiply by the height scale (to normalize to an actual height value), and then
+				// divide by the number of points used. Because the sample points essentially cover a
+				// 1x1x1 unit cube, this division normalizes the noise value into the sample points' space.
+				// Finally, subtract the world chunk position, so that the noise is in [0, 1] iff we are
+				// looking at the right chunk.
+				noiseVal = (heightScale * noise / size) - position.y;
 
 				for (int y = 0; y < sp1; y++) {
+					// Check if the current sample point is below the surface.
 					if (y * multiplier < noiseVal) {
-						data[(x * sp1 * sp1) + (y * sp1) + z] = 1;
+						data [(x * sp1 * sp1) + (y * sp1) + z] = 1;
 						hasNonzero = true;
+					} else {
+						// If it isn't, this sample point is above the noise value surface.
+						// We do an additional check on the point below us; if another point
+						// below us is also above the surface, then this point needs to do nothing.
+						// This can happen when y == 0.
+						if ((y - 1) * multiplier > noiseVal) {
+							break;
+						}
+
+						// The height difference between the noise and the next lowest sample point interval.
+						// If e.g. there are 8 sample points, this will look at the next lowest 1/8 and
+						// take the difference. Then, normalize to the range [0, 1].
+						float difference = (noiseVal - ((y - 1) * multiplier)) / multiplier;
+
+						// If the difference is > 0.5, then fix the point below us to 1 and change this point
+						// to be on the interval [0, 0.5] such that the surface = 0.5 at the height of
+						// the value of "difference". This ensures proper smoothing for the Marching Cubes.
+						if (difference > 0.5f) {
+							data [(x * sp1 * sp1) + (y * sp1) + z] = difference - 0.5f;
+						} else {
+							// Otherwise, fix this point to be 0 and the point below us to the interval [0.5, 1]
+							// in a similar way. We resolve the case of y == 0 separately, outside this loop.
+
+							data [(x * sp1 * sp1) + (y * sp1) + z] = 0;
+
+							if (y > 0) {
+								data [(x * sp1 * sp1) + ((y - 1) * sp1) + z] = difference + 0.5f;
+							}
+						}
+
+						// We need to do no further processing for all points above us (default value is 0).
+						break;
+					}
+				}
+
+				// Special case: When y == 0 and it is above the noise surface, we need to resolve it.
+				// We do this by checking in the mesh below it, for the contrapositive condition.
+				// This code eliminates vertical seams.
+				if (numPoints * multiplier < noiseVal && sp1 * multiplier > noiseVal) {
+					float difference = (noiseVal - (numPoints * multiplier)) / multiplier;
+					if (difference > 0.5f) {
+						data [(x * sp1 * sp1) + (numPoints * sp1) + z] = 1.0f;
+					} else {
+						data [(x * sp1 * sp1) + (numPoints * sp1) + z] = difference + 0.5f;
 					}
 				}
 			}
@@ -287,10 +313,7 @@ public class Generator : MonoBehaviour {
 			return null;
 		}
 	}
-
-	#endregion
-
-	#region Generate2DAsyc
+		
 
 	/**
 	 * Generates flat terrain on the surface level.
@@ -304,16 +327,13 @@ public class Generator : MonoBehaviour {
 		unfinishedObj.name = "(" + position.x + " ," + position.y + " ," + position.z + ")";
 		#endregion
 
-		#region Create data
+		#region Generate data
+		// Detailed comments are in the Generate2D method.
 		int numPoints = (int)(size * precision);
 
-		// We generate an extra vertex on each end to allow for seamless transitions.
 		int sp1 = numPoints + 1;
 		float[] data = new float[sp1 * sp1 * sp1];
 
-		// This scale value transforms "position" (in integer chunk coords) to actual
-		// world coords, using "size" (# points per mesh per axis) over "scale" (perlin offset).
-		// When size == scale, offsetScale == 1, so world coords == chunk coords.
 		float offsetScale = numPoints / scale / precision;
 		Vector3 offset = GEN_OFFSET + position * offsetScale;
 
@@ -323,24 +343,44 @@ public class Generator : MonoBehaviour {
 		float noiseVal;
 		for (int x = 0; x < sp1; x++) {
 			for (int z = 0; z < sp1; z++) {
-				noise = heightScale * temperatureGenerator.getValue(offset.x + (x / scale / precision), offset.z + (z / scale / precision));
-				noiseVal = (noise / sp1) - position.y;
-
-				// Note: old code (easier to understand why these values are chosen)
-				// if ((((float)j / numPoints) + position.y) * sp1 < noise [(i * sp1) + k]) {
-				//     data [count] = 1 (else 0)
+				noise = temperatureGenerator.getValue(offset.x + (x / scale / precision), offset.z + (z / scale / precision));
+				noiseVal = (heightScale * noise / size) - position.y;
 
 				for (int y = 0; y < sp1; y++) {
 					if (y * multiplier < noiseVal) {
-						data[(x * sp1 * sp1) + (y * sp1) + z] = 1;
+						data [(x * sp1 * sp1) + (y * sp1) + z] = 1;
 						hasNonzero = true;
+					} else {
+						if ((y - 1) * multiplier > noiseVal) {
+							break;
+						}
+
+						float difference = (noiseVal - ((y - 1) * multiplier)) / multiplier;
+
+						if (difference > 0.5f) {
+							data [(x * sp1 * sp1) + (y * sp1) + z] = difference - 0.5f;
+						} else {
+							data [(x * sp1 * sp1) + (y * sp1) + z] = 0;
+
+							if (y > 0) {
+								data [(x * sp1 * sp1) + ((y - 1) * sp1) + z] = difference + 0.5f;
+							}
+						}
+
+						break;
 					}
 				}
 
-				yield return null;
+				if (numPoints * multiplier < noiseVal && sp1 * multiplier > noiseVal) {
+					float difference = (noiseVal - (numPoints * multiplier)) / multiplier;
+					if (difference > 0.5f) {
+						data [(x * sp1 * sp1) + (numPoints * sp1) + z] = 1.0f;
+					} else {
+						data [(x * sp1 * sp1) + (numPoints * sp1) + z] = difference + 0.5f;
+					}
+				}
 			}
 		}
-
 		#endregion
 
 		if (hasNonzero) {
@@ -362,12 +402,11 @@ public class Generator : MonoBehaviour {
 			yield return null;
 		}
 	}
+		
 
-	#endregion
-
-	#region GenerateCave
-
-	// Custom C code for extra speed
+	/**
+	 * Custom C code for 3D Perlin noise, used in cave generation.
+	 */
 	[DllImport ("FastPerlin")]
 	private static extern double GetValue (double x, double y, double z);
 
@@ -449,6 +488,36 @@ public class Generator : MonoBehaviour {
 		yield return null;
 	}
 
+	/**
+	 * Generates a new Chunk object at the provided position, using the provided function
+	 * for data generation. Specifically, using Generate2D will create surface terrain,
+	 * and GenerateCave will generate 3D underground caves.
+	 */
+	public static Chunk generateChunk(Vector3 position, DataGenerator generate) {
+		Profiler.BeginSample("Vertex generation");
+		float[] data = generate (position);
+		Profiler.EndSample ();
 
-	#endregion
+		return new Chunk (position, generateObj (position, data), data);
+	}
+
+	/**
+	 * Generates an initial region around the player. Called on game start.
+	 */
+	public static void generate(DataGenerator generator) {
+
+		Profiler.BeginSample ("Generate");
+		for (int i = -renderRadius; i <= renderRadius; i++) {
+			for (int j = -renderRadius; j <= renderRadius; j++) {
+				for (int k = -renderRadius; k <= renderRadius; k++) {
+					//GameObject newObj = generateObj (new Vector3 (i, j, k), generator);
+					Chunk newChunk = generateChunk(new Vector3(i, j, k), generator);
+
+					chunks [k + renderRadius, j + renderRadius, i + renderRadius] = newChunk;
+					chunkCache [new Vector3Int (i, j, k)] = newChunk;
+				}
+			}
+		}
+		Profiler.EndSample ();
+	}
 }
