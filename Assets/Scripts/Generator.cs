@@ -33,6 +33,9 @@ public class Generator : MonoBehaviour {
 	// The value used for the isosurface for marching cubes.
 	protected static float marchingSurface = 0.5f;
 
+    // Should we generate chunky terrain (no marching cube smoothing) or no?
+    public static bool chunky = true;
+
 	/*
 	 * The render radius is how many chunks we process around the player. 0 = just load the chunk
 	 * the player is on; 1 = 1 chunk on every side; etc. Diameter is a calculated value with the
@@ -195,7 +198,7 @@ public class Generator : MonoBehaviour {
 			List<Vector3> verts = new List<Vector3> (DEFAULT_VERTEX_BUFFER_SIZE); 
 			List<int> tris = new List<int> (DEFAULT_TRI_BUFFER_SIZE);
 
-			OptimizedMarching marching = new OptimizedMarching ();
+            OptimizedMarching marching = new OptimizedMarching ();
 			marching.Surface = marchingSurface;
 
 			marching.Generate(data, (int)(size * precision) + 1, (int)(size * precision) + 1, (int)(size * precision) + 1, verts, tris);
@@ -218,6 +221,7 @@ public class Generator : MonoBehaviour {
 	 * of that code by now; see around "float difference = ...".
 	 */
 	public static float[] Generate2D(Vector3 position) {
+        Debug.Log("My position: " + position);
 		int numPoints = (int)(size * precision);
 
 		// We generate an extra vertex on each end to allow for seamless transitions.
@@ -254,55 +258,103 @@ public class Generator : MonoBehaviour {
 				noiseVal = (heightScale * noise / size) - position.y;
 
 				for (int y = 0; y < sp1; y++) {
-					// Check if the current sample point is below the surface.
-					if (y * multiplier < noiseVal) {
-						data [(x * sp1 * sp1) + (y * sp1) + z] = 1;
-						hasNonzero = true;
-					} else {
-						// If it isn't, this sample point is above the noise value surface.
-						// We do an additional check on the point below us; if another point
-						// below us is also above the surface, then this point needs to do nothing.
-						// This can happen when y == 0.
-						if ((y - 1) * multiplier > noiseVal) {
-							break;
-						}
+                    if (chunky)
+                    {
+                        if (y * multiplier < noiseVal)
+                        {
+                            data[(x * sp1 * sp1) + (y * sp1) + z] = 1;
+                            //Debug.Log("Noise value: " + (y * multiplier));
+                            hasNonzero = true;
+                        }
+                        //data[(x * sp1 * sp1) + (y * sp1) + z] = y * multiplier < noiseVal ? 1 : 0;
+                    }
+                    else
+                    {
 
-						// The height difference between the noise and the next lowest sample point interval.
-						// If e.g. there are 8 sample points, this will look at the next lowest 1/8 and
-						// take the difference. Then, normalize to the range [0, 1].
-						float difference = (noiseVal - ((y - 1) * multiplier)) / multiplier;
+                        //data[(x * sp1 * sp1) + (y * sp1) + z] = noiseVal;
 
-						// If the difference is > 0.5, then fix the point below us to 1 and change this point
-						// to be on the interval [0, 0.5] such that the surface = 0.5 at the height of
-						// the value of "difference". This ensures proper smoothing for the Marching Cubes.
-						if (difference > 0.5f) {
-							data [(x * sp1 * sp1) + (y * sp1) + z] = difference - 0.5f;
-						} else {
-							// Otherwise, fix this point to be 0 and the point below us to the interval [0.5, 1]
-							// in a similar way. We resolve the case of y == 0 separately, outside this loop.
+                        // Check if the current sample point is below the surface.
+                        if (y * multiplier < noiseVal)
+                        {
+                            data[(x * sp1 * sp1) + (y * sp1) + z] = 1;
+                            hasNonzero = true;
+                        }
+                        else
+                        {
+                            // If it isn't, this sample point is above the noise value surface.
+                            // We do an additional check on the point below us; if another point
+                            // below us is also above the surface, then this point needs to do nothing.
+                            // This can happen when y == 0.
+                            if ((y - 1) * multiplier > noiseVal)
+                            {
+                                break;
+                            }
 
-							data [(x * sp1 * sp1) + (y * sp1) + z] = 0;
+                            // The height difference between the noise and the next lowest sample point interval.
+                            // If e.g. there are 8 sample points, this will look at the next lowest 1/8 and
+                            // take the difference. Then, normalize to the range [0, 1].
+                            float difference = (noiseVal - ((y - 1) * multiplier)) / multiplier;
 
-							if (y > 0) {
-								data [(x * sp1 * sp1) + ((y - 1) * sp1) + z] = difference + 0.5f;
-							}
-						}
+                            // If the difference is > 0.5, then fix the point below us to 1 and change this point
+                            // to be on the interval [0, 0.5] such that the surface = 0.5 at the height of
+                            // the value of "difference". This ensures proper smoothing for the Marching Cubes.
 
-						// We need to do no further processing for all points above us (default value is 0).
-						break;
-					}
+                            data[(x * sp1 * sp1) + (y * sp1) + z] = Mathf.Lerp(0f, 0.5f, difference);
+                            if (y > 0)
+                            {
+                                data[(x * sp1 * sp1) + ((y - 1) * sp1) + z] = Mathf.Lerp(0.5f, 1f, difference);
+                            }
+
+                            //if (Mathf.Abs(difference - 0.5f) < 0.05f) {
+                            //    data[(x * sp1 * sp1) + (y * sp1) + z] = 0f;
+                            //}
+                            //else if (difference > 0.5f)
+                            //{
+                            //    //data[(x * sp1 * sp1) + (y * sp1) + z] = difference - 0.5f;
+                            //    data[(x * sp1 * sp1) + (y * sp1) + z] = (difference - 0.5f) / difference;
+                            //}
+                            //else
+                            //{
+                            //    // Otherwise, fix this point to be 0 and the point below us to the interval [0.5, 1]
+                            //    // in a similar way. We resolve the case of y == 0 separately, outside this loop.
+
+                            //    data[(x * sp1 * sp1) + (y * sp1) + z] = 0;
+
+                            //    if (y > 0)
+                            //    {
+                            //        //data[(x * sp1 * sp1) + ((y - 1) * sp1) + z] = difference + 0.5f;
+                            //        data[(x * sp1 * sp1) + ((y - 1) * sp1) + z] = 0.5f / (1 - difference);
+                            //    }
+                            //}
+
+                            // We need to do no further processing for all points above us (default value is 0).
+                            break;
+                        }
+                    }
 				}
 
 				// Special case: When y == 0 and it is above the noise surface, we need to resolve it.
 				// We do this by checking in the mesh below it, for the contrapositive condition.
 				// This code eliminates vertical seams.
 				if (numPoints * multiplier < noiseVal && sp1 * multiplier > noiseVal) {
-					float difference = (noiseVal - (numPoints * multiplier)) / multiplier;
-					if (difference > 0.5f) {
-						data [(x * sp1 * sp1) + (numPoints * sp1) + z] = 1.0f;
-					} else {
-						data [(x * sp1 * sp1) + (numPoints * sp1) + z] = difference + 0.5f;
-					}
+                    if (chunky)
+                    {
+                        data[(x * sp1 * sp1) + (numPoints * sp1) + z] = 1.0f;
+                    }
+                    else
+                    {
+                        float difference = (noiseVal - (numPoints * multiplier)) / multiplier;
+
+                        data[(x * sp1 * sp1) + (numPoints * sp1) + z] = Mathf.Lerp(0.5f, 1f, difference);
+                        //if (difference > 0.5f)
+                        //{
+                        //    data[(x * sp1 * sp1) + (numPoints * sp1) + z] = 1.0f;
+                        //}
+                        //else
+                        //{
+                        //    data[(x * sp1 * sp1) + (numPoints * sp1) + z] = difference + 0.5f;
+                        //}
+                    }
 				}
 			}
 		}
@@ -390,7 +442,8 @@ public class Generator : MonoBehaviour {
 			List<Vector3> verts = new List<Vector3> (DEFAULT_VERTEX_BUFFER_SIZE); 
 			List<int> tris = new List<int> (DEFAULT_TRI_BUFFER_SIZE);
 
-			Marching marching = new MarchingCubes ();
+			//Marching marching = new MarchingCubes ();
+            OptimizedMarching marching = new OptimizedMarching();
 			marching.Surface = marchingSurface;
 
 			marching.Generate(data, sp1, sp1, sp1, verts, tris);
