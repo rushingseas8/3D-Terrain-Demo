@@ -62,6 +62,7 @@
     </Reference>
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="Assets\FastNoise\FastNoise.cs" />
     <Compile Include="Assets\LibNoise\Generator\Billow.cs" />
     <Compile Include="Assets\LibNoise\Generator\Checker.cs" />
     <Compile Include="Assets\LibNoise\Generator\Const.cs" />
@@ -105,6 +106,8 @@
     <Compile Include="Assets\Scripts\DataStructures\Chunk.cs" />
     <Compile Include="Assets\Scripts\DataStructures\CubeBuffer.cs" />
     <Compile Include="Assets\Scripts\DataStructures\CubeStorage.cs" />
+    <Compile Include="Assets\Scripts\EditorGenerator.cs" />
+    <Compile Include="Assets\Scripts\FastNoise2.cs" />
     <Compile Include="Assets\Scripts\GameManager.cs" />
     <Compile Include="Assets\Scripts\Generator.cs" />
     <Compile Include="Assets\Scripts\Helper.cs" />

@@ -1,256 +1,448 @@
-﻿using System.Collections;
+﻿// Uncomment the following line to enable profiling
+//#define Profiling
+
+// Uncomment the following line to enable XZY ordering for the data
+// (Used for cache optimizing the 2D terrain generator)
+#define XZY_ORDERING
+
+using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Profiling;
 
-public class OptimizedMarching {
-	public float Surface;
-	private float[] Cube;
-	protected int[] WindingOrder;
+public class OptimizedMarching
+{
+    public float Surface;
+    private float[] Cube;
+    protected int[] WindingOrder;
 
-	private bool[] CubeBool;
+    private bool[] CubeBool;
 
-	// March data
-	private Vector3[] EdgeVertex;
+    // March data
+    private Vector3[] EdgeVertex;
 
-	public OptimizedMarching(float surface = 0.5f) {
-		Surface = surface;
-		Cube = new float[8];
-		CubeBool = new bool[8];
-		WindingOrder = new int[] { 0, 1, 2 };
-		EdgeVertex = new Vector3[12];
-	}
+    public OptimizedMarching(float surface = 0.5f)
+    {
+        Surface = surface;
+        Cube = new float[8];
+        CubeBool = new bool[8];
+        WindingOrder = new int[] { 0, 1, 2 };
+        EdgeVertex = new Vector3[12];
+    }
 
-	public void GenerateBool(bool[] voxels, int width, int height, int depth, IList<Vector3> verts, IList<int> indices) {
-		if (Surface > 0.0f) {
-			WindingOrder[0] = 0;
-			WindingOrder[1] = 1;
-			WindingOrder[2] = 2;
-		} else {
-			WindingOrder[0] = 2;
-			WindingOrder[1] = 1;
-			WindingOrder[2] = 0;
-		}
+    public void GenerateBool(bool[] voxels, int width, int height, int depth, IList<Vector3> verts, IList<int> indices)
+    {
+        if (Surface > 0.0f)
+        {
+            WindingOrder[0] = 0;
+            WindingOrder[1] = 1;
+            WindingOrder[2] = 2;
+        }
+        else
+        {
+            WindingOrder[0] = 2;
+            WindingOrder[1] = 1;
+            WindingOrder[2] = 0;
+        }
 
-		int x, y, z;
-		int wh = width * height;
+        int x, y, z;
+        int wh = width * height;
 
-		int[] yw = new int[height];
-		for (int i = 0; i < height; i++) { yw [i] = i * width; }
+        int[] yw = new int[height];
+        for (int i = 0; i < height; i++) { yw[i] = i * width; }
 
-		int[] zwh = new int[depth];
-		for (int i = 0; i < depth; i++) { zwh [i] = i * wh; }
+        int[] zwh = new int[depth];
+        for (int i = 0; i < depth; i++) { zwh[i] = i * wh; }
 
-		for (x = 0; x < width - 1; x++) {
-			for (y = 0; y < height - 1; y++) {
-				for (z = 0; z < depth - 1; z++) {
-					//Get the values in the 8 neighbours which make up a cube
-					//Profiler.BeginSample("Neighbor search");
+        for (x = 0; x < width - 1; x++)
+        {
+            for (y = 0; y < height - 1; y++)
+            {
+                for (z = 0; z < depth - 1; z++)
+                {
+                    //Get the values in the 8 neighbours which make up a cube
+#if(Profiling)
+                    Profiler.BeginSample("Neighbor search");
+#endif
 
-					int baseIndex = x + yw[y] + zwh[z];
-					int b1 = baseIndex + 1;
-					int b1w = b1 + width;
-					int bw = baseIndex + width;
+                    int baseIndex = x + yw[y] + zwh[z];
+                    int b1 = baseIndex + 1;
+                    int b1w = b1 + width;
+                    int bw = baseIndex + width;
 
-					CubeBool [0] = voxels[baseIndex];
-					CubeBool [1] = voxels[b1];
-					CubeBool [2] = voxels[b1w];
-					CubeBool [3] = voxels[bw];
+                    CubeBool[0] = voxels[baseIndex];
+                    CubeBool[1] = voxels[b1];
+                    CubeBool[2] = voxels[b1w];
+                    CubeBool[3] = voxels[bw];
 
-					CubeBool [4] = voxels[baseIndex + wh];
-					CubeBool [5] = voxels[b1 + wh];
-					CubeBool [6] = voxels[b1w + wh];
-					CubeBool [7] = voxels[bw + wh];
+                    CubeBool[4] = voxels[baseIndex + wh];
+                    CubeBool[5] = voxels[b1 + wh];
+                    CubeBool[6] = voxels[b1w + wh];
+                    CubeBool[7] = voxels[bw + wh];
 
-					//Profiler.EndSample ();
+#if (Profiling)
+                    Profiler.EndSample ();
+#endif
 
-					//Perform algorithm
-					//Profiler.BeginSample("March");
-					//March(x, y, z, Cube, verts, indices);
-					//Profiler.EndSample ();
+#if (Profiling)
+                    Profiler.BeginSample ("March setup");
+#endif
 
-					//Profiler.BeginSample ("March setup");
+                    int i, j, vert, idx;
+                    int flagIndex = 0;
+                    float offset = 0.0f;
 
-					int i, j, vert, idx;
-					int flagIndex = 0;
-					float offset = 0.0f;
+                    if (CubeBool[0])
+                        flagIndex |= 1;
+                    if (CubeBool[1])
+                        flagIndex |= 2;
+                    if (CubeBool[2])
+                        flagIndex |= 4;
+                    if (CubeBool[3])
+                        flagIndex |= 8;
+                    if (CubeBool[4])
+                        flagIndex |= 16;
+                    if (CubeBool[5])
+                        flagIndex |= 32;
+                    if (CubeBool[6])
+                        flagIndex |= 64;
+                    if (CubeBool[7])
+                        flagIndex |= 128;
 
-					if (CubeBool [0])
-						flagIndex |= 1;
-					if (CubeBool [1])
-						flagIndex |= 2;
-					if (CubeBool [2])
-						flagIndex |= 4;
-					if (CubeBool [3])
-						flagIndex |= 8;
-					if (CubeBool [4])
-						flagIndex |= 16;
-					if (CubeBool [5])
-						flagIndex |= 32;
-					if (CubeBool [6])
-						flagIndex |= 64;
-					if (CubeBool [7])
-						flagIndex |= 128;
+                    //Find which edges are intersected by the surface
+                    int edgeFlags = CubeEdgeFlags[flagIndex];
 
-					//Find which edges are intersected by the surface
-					int edgeFlags = CubeEdgeFlags[flagIndex];
+#if (Profiling)
+					Profiler.EndSample ();
+#endif
 
-					//Profiler.EndSample ();
-
-					//If the cube is entirely inside or outside of the surface, then there will be no intersections
-					if (edgeFlags == 0) { continue; }
-
-
-					//Profiler.BeginSample ("March intersection");
-					//Find the point of intersection of the surface with each edge
-					for (i = 0; i < 12; i++)
-					{
-						//if there is an intersection on this edge
-						if ((edgeFlags & (1 << i)) != 0)
-						{
-							offset = GetOffsetBool(CubeBool[EdgeConnection[i, 0]], CubeBool[EdgeConnection[i, 1]]);
-
-							EdgeVertex[i].x = x + (VertexOffset[EdgeConnection[i, 0], 0] + offset * EdgeDirection[i, 0]);
-							EdgeVertex[i].y = y + (VertexOffset[EdgeConnection[i, 0], 1] + offset * EdgeDirection[i, 1]);
-							EdgeVertex[i].z = z + (VertexOffset[EdgeConnection[i, 0], 2] + offset * EdgeDirection[i, 2]);
-						}
-					}
-					//Profiler.EndSample ();
-
-					//Profiler.BeginSample ("March triangles");
-					//Save the triangles that were found. There can be up to five per cube
-					for (i = 0; i < 15; i+=3)
-					{
-						if (TriangleConnectionTable[flagIndex, i] < 0) break;
-
-						idx = verts.Count;
-
-						for (j = 0; j < 3; j++)
-						{
-							vert = TriangleConnectionTable[flagIndex, i + j];
-							indices.Add(idx + WindingOrder[j]);
-							verts.Add(EdgeVertex[vert]);
-						}
-					}
-					//Profiler.EndSample ();
-
-				}
-			}
-		}
-	}
-
-	public void Generate(float[] voxels, int width, int height, int depth, IList<Vector3> verts, IList<int> indices) {
-		if (Surface > 0.0f) {
-			WindingOrder[0] = 0;
-			WindingOrder[1] = 1;
-			WindingOrder[2] = 2;
-		} else {
-			WindingOrder[0] = 2;
-			WindingOrder[1] = 1;
-			WindingOrder[2] = 0;
-		}
-
-		int x, y, z;
-		int wh = width * height;
-
-		int[] yw = new int[height];
-		for (int i = 0; i < height; i++) { yw [i] = i * width; }
-
-		int[] zwh = new int[depth];
-		for (int i = 0; i < depth; i++) { zwh [i] = i * wh; }
-
-		for (x = 0; x < width - 1; x++) {
-			for (y = 0; y < height - 1; y++) {
-				for (z = 0; z < depth - 1; z++) {
-					//Get the values in the 8 neighbours which make up a cube
-					//Profiler.BeginSample("Neighbor search");
-
-					int baseIndex = x + yw[y] + zwh[z];
-					int b1 = baseIndex + 1;
-					int b1w = b1 + width;
-					int bw = baseIndex + width;
-
-					Cube [0] = voxels[baseIndex];
-					Cube [1] = voxels[b1];
-					Cube [2] = voxels[b1w];
-					Cube [3] = voxels[bw];
-
-					Cube [4] = voxels[baseIndex + wh];
-					Cube [5] = voxels[b1 + wh];
-					Cube [6] = voxels[b1w + wh];
-					Cube [7] = voxels[bw + wh];
-
-					//Profiler.EndSample ();
-
-					//Perform algorithm
-					//Profiler.BeginSample("March");
-					//March(x, y, z, Cube, verts, indices);
-					//Profiler.EndSample ();
-
-					//Profiler.BeginSample ("March setup");
-
-					int i, j, vert, idx;
-					int flagIndex = 0;
-					float offset = 0.0f;
-
-					if (Cube [0] <= Surface)
-						flagIndex |= 1;
-					if (Cube [1] <= Surface)
-						flagIndex |= 2;
-					if (Cube [2] <= Surface)
-						flagIndex |= 4;
-					if (Cube [3] <= Surface)
-						flagIndex |= 8;
-					if (Cube [4] <= Surface)
-						flagIndex |= 16;
-					if (Cube [5] <= Surface)
-						flagIndex |= 32;
-					if (Cube [6] <= Surface)
-						flagIndex |= 64;
-					if (Cube [7] <= Surface)
-						flagIndex |= 128;
-
-					//Find which edges are intersected by the surface
-					int edgeFlags = CubeEdgeFlags[flagIndex];
-
-					//Profiler.EndSample ();
-
-					//If the cube is entirely inside or outside of the surface, then there will be no intersections
-					if (edgeFlags == 0) { continue; }
+                    //If the cube is entirely inside or outside of the surface, then there will be no intersections
+                    if (edgeFlags == 0) { continue; }
 
 
-					//Profiler.BeginSample ("March intersection");
-					//Find the point of intersection of the surface with each edge
-					for (i = 0; i < 12; i++)
-					{
-						//if there is an intersection on this edge
-						if ((edgeFlags & (1 << i)) != 0)
-						{
-							offset = GetOffset(Cube[EdgeConnection[i, 0]], Cube[EdgeConnection[i, 1]]);
+#if (Profiling)
+					Profiler.BeginSample ("March intersection");
+#endif
+                    //Find the point of intersection of the surface with each edge
+                    for (i = 0; i < 12; i++)
+                    {
+                        //if there is an intersection on this edge
+                        if ((edgeFlags & (1 << i)) != 0)
+                        {
+                            offset = GetOffsetBool(CubeBool[EdgeConnection[i, 0]], CubeBool[EdgeConnection[i, 1]]);
 
-							EdgeVertex[i].x = x + (VertexOffset[EdgeConnection[i, 0], 0] + offset * EdgeDirection[i, 0]);
-							EdgeVertex[i].y = y + (VertexOffset[EdgeConnection[i, 0], 1] + offset * EdgeDirection[i, 1]);
-							EdgeVertex[i].z = z + (VertexOffset[EdgeConnection[i, 0], 2] + offset * EdgeDirection[i, 2]);
-						}
-					}
-					//Profiler.EndSample ();
+                            EdgeVertex[i].x = x + (VertexOffset[EdgeConnection[i, 0], 0] + offset * EdgeDirection[i, 0]);
+                            EdgeVertex[i].y = y + (VertexOffset[EdgeConnection[i, 0], 1] + offset * EdgeDirection[i, 1]);
+                            EdgeVertex[i].z = z + (VertexOffset[EdgeConnection[i, 0], 2] + offset * EdgeDirection[i, 2]);
+                        }
+                    }
 
-					//Profiler.BeginSample ("March triangles");
-					//Save the triangles that were found. There can be up to five per cube
-					for (i = 0; i < 15; i+=3)
-					{
-						if (TriangleConnectionTable[flagIndex, i] < 0) break;
+#if (Profiling)
+                    Profiler.EndSample ();
+#endif
 
-						idx = verts.Count;
+#if (Profiling)
+                    Profiler.BeginSample ("March triangles");
+#endif
+                    //Save the triangles that were found. There can be up to five per cube
+                    for (i = 0; i < 15; i += 3)
+                    {
+                        if (TriangleConnectionTable[flagIndex, i] < 0) break;
 
-						for (j = 0; j < 3; j++)
-						{
-							vert = TriangleConnectionTable[flagIndex, i + j];
-							indices.Add(idx + WindingOrder[j]);
-							verts.Add(EdgeVertex[vert]);
-						}
-					}
-					//Profiler.EndSample ();
+                        idx = verts.Count;
+
+                        for (j = 0; j < 3; j++)
+                        {
+                            vert = TriangleConnectionTable[flagIndex, i + j];
+                            indices.Add(idx + WindingOrder[j]);
+                            verts.Add(EdgeVertex[vert]);
+                        }
+                    }
+#if (Profiling)
+                    Profiler.EndSample ();
+#endif
+
+                }
+            }
+        }
+    }
+
+    public void GenerateXZY(float[] voxels, int width, int height, int depth, IList<Vector3> verts, IList<int> indices)
+    {
+        if (Surface > 0.0f)
+        {
+            WindingOrder[0] = 0;
+            WindingOrder[1] = 1;
+            WindingOrder[2] = 2;
+        }
+        else
+        {
+            WindingOrder[0] = 2;
+            WindingOrder[1] = 1;
+            WindingOrder[2] = 0;
+        }
+
+        int x, y, z;
+        int wh = width * height;
+
+        int[] yw = new int[height];
+        for (int i = 0; i < height; i++) { yw[i] = i * width; }
+        //int[] zw = new int[height];
+        //for (int i = 0; i < height; i++) { zw[i] = i * width; }
+
+        int[] zwh = new int[depth];
+        for (int i = 0; i < depth; i++) { zwh[i] = i * wh; }
+        //int[] ywh = new int[depth];
+        //for (int i = 0; i < depth; i++) { ywh[i] = i * wh; }
+
+        for (x = 0; x < width - 1; x++)
+        {
+            for (z = 0; z < height - 1; z++)
+            {
+                for (y = 0; y < depth - 1; y++)
+                {
+                    //Get the values in the 8 neighbours which make up a cube
+#if (Profiling)
+                    Profiler.BeginSample("Neighbor search");
+#endif
+
+                    //int baseIndex = x + zw[z] + ywh[y];
+                    int baseIndex = x + yw[y] + zwh[z];
+                    int b1 = baseIndex + 1;
+                    int b1w = b1 + width;
+                    int bw = baseIndex + width;
+
+                    Cube[0] = voxels[baseIndex];
+                    Cube[1] = voxels[b1];
+                    Cube[2] = voxels[b1w];
+                    Cube[3] = voxels[bw];
+
+                    Cube[4] = voxels[baseIndex + wh];
+                    Cube[5] = voxels[b1 + wh];
+                    Cube[6] = voxels[b1w + wh];
+                    Cube[7] = voxels[bw + wh];
+
+#if (Profiling)
+                    Profiler.EndSample ();
+                    Profiler.BeginSample ("March setup");
+#endif
+
+                    int i, j, vert, idx;
+                    int flagIndex = 0;
+                    float offset = 0.0f;
+
+                    if (Cube[0] <= Surface)
+                        flagIndex |= 1;
+                    if (Cube[1] <= Surface)
+                        flagIndex |= 2;
+                    if (Cube[2] <= Surface)
+                        flagIndex |= 4;
+                    if (Cube[3] <= Surface)
+                        flagIndex |= 8;
+                    if (Cube[4] <= Surface)
+                        flagIndex |= 16;
+                    if (Cube[5] <= Surface)
+                        flagIndex |= 32;
+                    if (Cube[6] <= Surface)
+                        flagIndex |= 64;
+                    if (Cube[7] <= Surface)
+                        flagIndex |= 128;
+
+                    //Find which edges are intersected by the surface
+                    int edgeFlags = CubeEdgeFlags[flagIndex];
+
+#if (Profiling)
+                    Profiler.EndSample ();
+#endif
+
+                    //If the cube is entirely inside or outside of the surface, then there will be no intersections
+                    if (edgeFlags == 0) { continue; }
+
+#if (Profiling)
+                    Profiler.BeginSample ("March intersection");
+#endif
+                    //Find the point of intersection of the surface with each edge
+                    for (i = 0; i < 12; i++)
+                    {
+                        //if there is an intersection on this edge
+                        if ((edgeFlags & (1 << i)) != 0)
+                        {
+                            offset = GetOffset(Cube[EdgeConnection[i, 0]], Cube[EdgeConnection[i, 1]]);
+
+                            EdgeVertex[i].x = x + (VertexOffset[EdgeConnection[i, 0], 0] + offset * EdgeDirection[i, 0]);
+                            EdgeVertex[i].y = y + (VertexOffset[EdgeConnection[i, 0], 1] + offset * EdgeDirection[i, 1]);
+                            EdgeVertex[i].z = z + (VertexOffset[EdgeConnection[i, 0], 2] + offset * EdgeDirection[i, 2]);
+                        }
+                    }
+
+#if (Profiling)
+                    Profiler.EndSample ();
+                    Profiler.BeginSample ("March triangles");
+#endif
+
+                    //Save the triangles that were found. There can be up to five per cube
+                    for (i = 0; i < 15; i += 3)
+                    {
+                        if (TriangleConnectionTable[flagIndex, i] < 0) break;
+
+                        idx = verts.Count;
+
+                        for (j = 0; j < 3; j++)
+                        {
+                            vert = TriangleConnectionTable[flagIndex, i + j];
+                            indices.Add(idx + WindingOrder[j]);
+                            verts.Add(EdgeVertex[vert]);
+                        }
+                    }
+
+#if (Profiling)
+                    Profiler.EndSample ();
+#endif
+
+                }
+            }
+        }
+    }
+
+    // TODO: Can optimize by not doing a cube at a time, and instead doing a whole plane at once and reusing.
+    // See: https://stackoverflow.com/questions/16055829/marching-cubes-efficiency-you-can-reduce-3-4rs-of-the-edge-calculations
+    public void Generate(float[] voxels, int width, int height, int depth, IList<Vector3> verts, IList<int> indices)
+    {
+        if (Surface > 0.0f)
+        {
+            WindingOrder[0] = 0;
+            WindingOrder[1] = 1;
+            WindingOrder[2] = 2;
+        }
+        else
+        {
+            WindingOrder[0] = 2;
+            WindingOrder[1] = 1;
+            WindingOrder[2] = 0;
+        }
+
+        int x, y, z;
+        int wh = width * height;
+
+        int[] yw = new int[height];
+        for (int i = 0; i < height; i++) { yw[i] = i * width; }
+
+        int[] zwh = new int[depth];
+        for (int i = 0; i < depth; i++) { zwh[i] = i * wh; }
+
+        for (x = 0; x < width - 1; x++)
+        {
+#if (XZY_ORDERING)
+            for (z = 0; z < height - 1; z++)
+
+#else
+            for (y = 0; y < height - 1; y++)
+#endif
+            {
+#if (XZY_ORDERING)
+
+                for (y = 0; y < depth - 1; y++)
+                {
+#else
+                for (z = 0; z < depth - 1; z++)
+                {
+#endif
+                //Get the values in the 8 neighbours which make up a cube
+#if (Profiling)
+                    Profiler.BeginSample("Neighbor search");
+#endif
+
+                int baseIndex = x + yw[y] + zwh[z];
+                    int b1 = baseIndex + 1;
+                    int b1w = b1 + width;
+                    int bw = baseIndex + width;
+
+                    Cube[0] = voxels[baseIndex];
+                    Cube[1] = voxels[b1];
+                    Cube[2] = voxels[b1w];
+                    Cube[3] = voxels[bw];
+
+                    Cube[4] = voxels[baseIndex + wh];
+                    Cube[5] = voxels[b1 + wh];
+                    Cube[6] = voxels[b1w + wh];
+                    Cube[7] = voxels[bw + wh];
+
+#if (Profiling)
+					Profiler.EndSample ();
+					Profiler.BeginSample ("March setup");
+#endif
+
+                    int i, j, vert, idx;
+                    int flagIndex = 0;
+                    float offset = 0.0f;
+
+                    if (Cube[0] <= Surface)
+                        flagIndex |= 1;
+                    if (Cube[1] <= Surface)
+                        flagIndex |= 2;
+                    if (Cube[2] <= Surface)
+                        flagIndex |= 4;
+                    if (Cube[3] <= Surface)
+                        flagIndex |= 8;
+                    if (Cube[4] <= Surface)
+                        flagIndex |= 16;
+                    if (Cube[5] <= Surface)
+                        flagIndex |= 32;
+                    if (Cube[6] <= Surface)
+                        flagIndex |= 64;
+                    if (Cube[7] <= Surface)
+                        flagIndex |= 128;
+
+                    //Find which edges are intersected by the surface
+                    int edgeFlags = CubeEdgeFlags[flagIndex];
+
+#if (Profiling)
+					Profiler.EndSample ();
+#endif
+
+                    //If the cube is entirely inside or outside of the surface, then there will be no intersections
+                    if (edgeFlags == 0) { continue; }
+
+#if (Profiling)
+					Profiler.BeginSample ("March intersection");
+#endif
+                    //Find the point of intersection of the surface with each edge
+                    for (i = 0; i < 12; i++)
+                    {
+                        //if there is an intersection on this edge
+                        if ((edgeFlags & (1 << i)) != 0)
+                        {
+                            offset = GetOffset(Cube[EdgeConnection[i, 0]], Cube[EdgeConnection[i, 1]]);
+
+                            EdgeVertex[i].x = x + (VertexOffset[EdgeConnection[i, 0], 0] + offset * EdgeDirection[i, 0]);
+                            EdgeVertex[i].y = y + (VertexOffset[EdgeConnection[i, 0], 1] + offset * EdgeDirection[i, 1]);
+                            EdgeVertex[i].z = z + (VertexOffset[EdgeConnection[i, 0], 2] + offset * EdgeDirection[i, 2]);
+                        }
+                    }
+
+#if (Profiling)
+					Profiler.EndSample ();
+					Profiler.BeginSample ("March triangles");
+#endif
+
+                    //Save the triangles that were found. There can be up to five per cube
+                    for (i = 0; i < 15; i += 3)
+                    {
+                        if (TriangleConnectionTable[flagIndex, i] < 0) break;
+
+                        idx = verts.Count;
+
+                        for (j = 0; j < 3; j++)
+                        {
+                            vert = TriangleConnectionTable[flagIndex, i + j];
+                            indices.Add(idx + WindingOrder[j]);
+                            verts.Add(EdgeVertex[vert]);
+                        }
+                    }
+
+#if (Profiling)
+					Profiler.EndSample ();
+#endif
 
 				}
 			}
@@ -362,14 +554,14 @@ public class OptimizedMarching {
 	/// edgeDirection lists the direction vector (vertex1-vertex0) for each edge in the cube.
 	/// edgeDirection[12][3]
 	/// </summary>
-	#region EdgeDirection
+#region EdgeDirection
 	private static readonly float[,] EdgeDirection = new float[,]
 	{
 		{1.0f, 0.0f, 0.0f},{0.0f, 1.0f, 0.0f},{-1.0f, 0.0f, 0.0f},{0.0f, -1.0f, 0.0f},
 		{1.0f, 0.0f, 0.0f},{0.0f, 1.0f, 0.0f},{-1.0f, 0.0f, 0.0f},{0.0f, -1.0f, 0.0f},
 		{0.0f, 0.0f, 1.0f},{0.0f, 0.0f, 1.0f},{ 0.0f, 0.0f, 1.0f},{0.0f,  0.0f, 1.0f}
 	};
-	#endregion
+#endregion
 
 
 	/// <summary>
@@ -383,7 +575,7 @@ public class OptimizedMarching {
 	/// For each entry in the table, if edge #n is intersected, then bit #n is set to 1.
 	/// cubeEdgeFlags[256]
 	/// </summary>
-	#region CubeEdgeFlags
+#region CubeEdgeFlags
 	private static readonly int[] CubeEdgeFlags = new int[]
 	{
 		0x000, 0x109, 0x203, 0x30a, 0x406, 0x50f, 0x605, 0x70c, 0x80c, 0x905, 0xa0f, 0xb06, 0xc0a, 0xd03, 0xe09, 0xf00, 
@@ -403,7 +595,7 @@ public class OptimizedMarching {
 		0xe90, 0xf99, 0xc93, 0xd9a, 0xa96, 0xb9f, 0x895, 0x99c, 0x69c, 0x795, 0x49f, 0x596, 0x29a, 0x393, 0x099, 0x190, 
 		0xf00, 0xe09, 0xd03, 0xc0a, 0xb06, 0xa0f, 0x905, 0x80c, 0x70c, 0x605, 0x50f, 0x406, 0x30a, 0x203, 0x109, 0x000
 	};
-	#endregion
+#endregion
 
 
 	/// <summary>
@@ -414,7 +606,7 @@ public class OptimizedMarching {
 	/// and corner[1] are inside of the surface, but the rest of the cube is not.
 	/// triangleConnectionTable[256][16]
 	/// </summary>
-	#region TriangleConnectionTable
+#region TriangleConnectionTable
 	private static readonly int[,] TriangleConnectionTable = new int[,]  
 	{
 		{-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1},
@@ -674,5 +866,5 @@ public class OptimizedMarching {
 		{0, 3, 8, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1},
 		{-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1}
 	};
-	#endregion
+#endregion
 }

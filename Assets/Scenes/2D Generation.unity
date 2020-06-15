@@ -205,11 +205,11 @@ Transform:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 741563710}
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 1, z: -10}
+  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
+  m_LocalPosition: {x: 0, y: -82, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_Children: []
-  m_Father: {fileID: 0}
+  m_Father: {fileID: 1940491137}
   m_RootOrder: 0
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &1461156233
@@ -223,7 +223,7 @@ GameObject:
   - component: {fileID: 1461156235}
   - component: {fileID: 1461156234}
   m_Layer: 0
-  m_Name: Directional Light
+  m_Name: Sun
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -301,7 +301,7 @@ Transform:
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_Children: []
   m_Father: {fileID: 0}
-  m_RootOrder: 1
+  m_RootOrder: 0
   m_LocalEulerAnglesHint: {x: 50, y: -30, z: 0}
 --- !u!1 &1940491132
 GameObject:
@@ -415,9 +415,10 @@ Transform:
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: 0, y: 32, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
-  m_Children: []
+  m_Children:
+  - {fileID: 741563714}
   m_Father: {fileID: 0}
-  m_RootOrder: 3
+  m_RootOrder: 2
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!54 &1940491138
 Rigidbody:
@@ -433,7 +434,7 @@ Rigidbody:
   m_UseGravity: 1
   m_IsKinematic: 0
   m_Interpolate: 0
-  m_Constraints: 0
+  m_Constraints: 112
   m_CollisionDetection: 0
 --- !u!1 &2106874203
 GameObject:
@@ -445,6 +446,7 @@ GameObject:
   m_Component:
   - component: {fileID: 2106874205}
   - component: {fileID: 2106874204}
+  - component: {fileID: 2106874206}
   m_Layer: 0
   m_Name: Game Manager
   m_TagString: Untagged
@@ -472,9 +474,38 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 2106874203}
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: -8.986129, y: -26.470617, z: 119.64835}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_Children: []
   m_Father: {fileID: 0}
-  m_RootOrder: 2
+  m_RootOrder: 1
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &2106874206
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2106874203}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e5ab9a961793c41c7a2232ce9c5ed918, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  size: 16
+  scale: 128
+  heightScale: 32
+  precision: 1
+  marchingSurface: 0.5
+  smoothValue: 1
+  renderRadius: 4
+  GEN_OFFSET: {x: 1023, y: 1942, z: 7777}
+  defaultMaterial: {fileID: 0}
+  defaultPhysics: {fileID: 0}
+  noiseGenerator:
+    octaves: 8
+    frequency: 1
+    lacunarity: 2
+    persistence: 0.5
+    xOffset: 0
+    zOffset: 0

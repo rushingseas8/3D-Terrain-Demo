@@ -10,11 +10,31 @@ using LibNoise.Generator;
 
 public class GameManager : MonoBehaviour {
 
-	public static bool twoDMode = true;
+    // Main instance
+    private static GameManager instance;
 
-	//private bool[,,] data;
-	private bool[] data;
-	private Vector3[] dataVec;
+    // On awake, initialize the Generator instance
+    public void Awake()
+    {
+        if (instance == null)
+        {
+            instance = this;
+        }
+        else
+        {
+            Debug.Log("Extra GameManager in scene on \"" + gameObject.name + "\"");
+#if UNITY_EDITOR
+            UnityEditor.EditorGUIUtility.PingObject(gameObject);
+#endif
+        }
+    }
+
+    /// <summary>
+    /// Should we run a 2D or 3D demo?
+    /// </summary>
+    [SerializeField]
+    [Tooltip("Should we run a 2D terrain demo, or a 3D cave demo?")]
+	public static bool twoDMode = true;
 
 	// Use this for initialization
 	void Start () {
@@ -74,10 +94,10 @@ public class GameManager : MonoBehaviour {
 		*/
 
 		if (twoDMode) {
-			Generator.generate (Generator.Generate2D);
+			Generator.Generate (Generator.Generate2D);
 		} else {
 			GameObject.Destroy (GameObject.Find ("Sun"));
-			Generator.generate (Generator.GenerateCave);
+			Generator.Generate (Generator.GenerateCave);
 		}
 	}
 

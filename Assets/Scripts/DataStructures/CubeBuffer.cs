@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using System;
 
-public class CubeBuffer<T> {
+public class CubeBuffer<T> : IEnumerable {
 
 	private int size;
 	private T[,,] cube;
@@ -72,7 +72,10 @@ public class CubeBuffer<T> {
 				(cube [pos.x, pos.y, pos.z] as GameObject).SetActive (false);
 			}
 			if (typeof(Chunk) == typeof(T)) {
-				(cube [pos.x, pos.y, pos.z] as Chunk).obj.SetActive (false);
+                if ((cube[pos.x, pos.y, pos.z] as Chunk).obj != null)
+                {
+                    (cube[pos.x, pos.y, pos.z] as Chunk).obj.SetActive(false);
+                }
 			}
 			
 			cube [pos.x, pos.y, pos.z] = default(T);
@@ -180,4 +183,26 @@ public class CubeBuffer<T> {
 			}
 		}
 	}
+
+    /// <summary>
+    /// Clears this CubeBuffer completely.
+    /// </summary>
+    public void Clear() 
+    {
+        for (int x = 0; x < size; x++) 
+        {
+            for (int y = 0; y < size; y++)
+            {
+                for (int z = 0; z < size; z++)
+                {
+                    cube[x, y, z] = default;
+                }
+            }
+        }
+    }
+
+    public IEnumerator GetEnumerator()
+    {
+        return cube.GetEnumerator();
+    }
 }
