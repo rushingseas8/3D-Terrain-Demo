@@ -211,6 +211,7 @@ public class Controller : MonoBehaviour {
 			if (movementDir != Direction.NONE) {
 				Generator.Chunks.shift (movementDir);
 				int[] regenerateIndices = CubeBuffer<Chunk>.faceIndices [(int)movementDir];
+                //Debug.Log("Regenerating " + regenerateIndices.Length + " indices!");
 				for (int i = 0; i < regenerateIndices.Length; i++) {
 					Vector3Int pos = Helper.indexToCoords (Generator.RenderDiameter, regenerateIndices [i]);
 
@@ -227,26 +228,19 @@ public class Controller : MonoBehaviour {
 
 						Generator.Chunks [regenerateIndices [i]] = cachedChunk;
                         cachedChunk.obj?.SetActive(true);
-					} else {
-						// If we don't find it, then actually regenerate the mesh asyncronously. 
-
+                    } else {
+                        // If we don't find it, then actually regenerate the mesh asyncronously. 
 						GameObject shell = Generator.generateEmpty ();
 						Chunk chunkShell = new Chunk (genPos, shell);
 						Generator.Chunks [regenerateIndices [i]] = chunkShell;
 						Generator.ChunkCache [genPos] = chunkShell;
+                        // TODO starting a lot of coroutines is expensive. Maybe make another work queue for 
+                        // eventually generating the chunks?
 						StartCoroutine (Generator.Generate2DAsync (genPos, shell));
-
-						/*
-						GameObject obj = Generator.generateObj (genPos, Generator.Generate2D);
-						Generator.chunks [regenerateIndices [i]] = obj;
-						Generator.chunkCache [genPos] = obj;
-						*/
-
-					}
+                    }
 				}
 			}
-
-		} else {
+        } else {
 			#region Generate Terrain
 
 			// TODO: make the range (-Size, 0) count as chunk -1, rather than its current 0

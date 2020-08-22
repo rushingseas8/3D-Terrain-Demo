@@ -20,7 +20,9 @@ using UnityEngine.Profiling;
 ///     E.g., colliders could be approximated with a box at the boundaries, and
 ///     deferred until player or other interactables are within the boundary.
 ///     This could also be fully disabled for the view-only rendering we're doing.
-/// 
+/// - Finally, at large render distances, there is a good overhead from the sheer
+///     number of GameObjects at once. Look into either mesh batching/merging,
+///     or other means of reducing GOs. Maybe an octree/LOD system?
 /// </summary>
 [ExecuteInEditMode]
 public class EditorGenerator : MonoBehaviour

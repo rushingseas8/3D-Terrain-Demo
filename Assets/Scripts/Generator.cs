@@ -61,6 +61,9 @@ public class Generator : MonoBehaviour {
             // Set the fog strength for the underground scene.
             // Found by experimental values and fitting a curve to them
             fogStrength = Mathf.Exp(-0.055f * (size * renderRadius + 16));
+
+            // Queue for async assigning mesh colliders to GameObjects
+            meshColliderAssigningQueue = new Queue<(GameObject, Mesh)>();
         }
         else
         {
@@ -68,6 +71,18 @@ public class Generator : MonoBehaviour {
 #if UNITY_EDITOR
             UnityEditor.EditorGUIUtility.PingObject(gameObject);
 #endif
+        }
+    }
+
+    private void Update() 
+    {
+        // If there's a mesh collider we need to assign, then we should do one!
+        if (Instance.meshColliderAssigningQueue.Count > 0)
+        {
+            Profiler.BeginSample("Async mesh collider assignment");
+            (GameObject unfinishedObj, Mesh mesh) = meshColliderAssigningQueue.Dequeue();
+            unfinishedObj.GetComponent<MeshCollider>().sharedMesh = mesh;
+            Profiler.EndSample();
         }
     }
 
@@ -226,6 +241,14 @@ public class Generator : MonoBehaviour {
     [SerializeField]
     private Vector3 GEN_OFFSET = new Vector3 (1023, 1942, 7777);
 
+    /// <summary>
+    /// The mesh collider assigning queue.
+    /// When we're creating a Mesh asynchronously, one of the biggest blocking operations
+    /// is assigning the mesh collider. So we push the work onto a queue and do at most
+    /// one per frame.
+    /// </summary>
+    private Queue<(GameObject, Mesh)> meshColliderAssigningQueue;
+
     #endregion
 
     #region Data used for controlling all Generators
@@ -308,7 +331,58 @@ public class Generator : MonoBehaviour {
         Profiler.BeginSample ("Mesh Collider assigning");
         if (unfinishedObj == null) { return; }
         unfinishedObj.GetComponent<MeshCollider>().sharedMesh = mesh; 
+        //Instance.meshColliderAssigningQueue.Enqueue((unfinishedObj, mesh));
         Profiler.EndSample ();
+    }
+
+    private static void assignMeshAsync(GameObject unfinishedObj, Vector3[] vertices, int[] triangles, Vector2[] uvs = null, Vector3[] normals = null) 
+    {
+        if (unfinishedObj == null) { return; }
+
+        Mesh mesh = new Mesh();
+        mesh.vertices = vertices;
+        mesh.triangles = triangles;
+
+        Profiler.BeginSample("UV assigning");
+        if (uvs == null)
+        {
+            uvs = new Vector2[vertices.Length];
+            for (int i = 0; i < uvs.Length; i += 3)
+            {
+                uvs[i + 0] = new Vector2(0, 0);
+                uvs[i + 1] = new Vector2(1, 0);
+                uvs[i + 2] = new Vector2(1, 1);
+            }
+        }
+        mesh.uv = uvs;
+        Profiler.EndSample();
+
+        Profiler.BeginSample("Normal calculation");
+        if (normals == null)
+        {
+            mesh.RecalculateNormals();
+        }
+        else
+        {
+            mesh.normals = normals;
+        }
+        Profiler.EndSample();
+
+        Profiler.BeginSample("Mesh Filter assigning");
+        if (unfinishedObj == null) { return; }
+        unfinishedObj.GetComponent<MeshFilter>().sharedMesh = mesh;
+        Profiler.EndSample();
+
+        Profiler.BeginSample("Mesh Renderer assigning");
+        if (unfinishedObj == null) { return; }
+        unfinishedObj.GetComponent<MeshRenderer>().material = Instance.defaultMaterial;
+        Profiler.EndSample();
+
+        Profiler.BeginSample("Mesh Collider assignment deferral");
+        if (unfinishedObj == null) { return; }
+        //unfinishedObj.GetComponent<MeshCollider>().sharedMesh = mesh; 
+        Instance.meshColliderAssigningQueue.Enqueue((unfinishedObj, mesh));
+        Profiler.EndSample();
     }
 
     private static List<Vector3> MARCHING_CUBES_VERTS = new List<Vector3>(25000);
@@ -372,126 +446,6 @@ public class Generator : MonoBehaviour {
         //Generate2D_XZY(position, ref data, out bool isEmpty);
 
         return isEmpty ? null : data;
-    }
-
-    public static void Generate2D_XZY(Vector3 position, ref float[] data, out bool isEmpty)
-    {
-        int numPoints = (int)(Instance.size * Instance.precision);
-        int sp1 = numPoints + 1;
-
-        float offsetScale = numPoints / Instance.scale / Instance.precision;
-        Vector3 offset = Instance.GEN_OFFSET + position * offsetScale;
-
-        bool hasGround = false;
-        bool hasAir = false;
-        float multiplier = 1.0f / numPoints;
-        float noise;
-        float noiseVal;
-        int index = -1;
-        for (int x = 0; x < sp1; x++)
-        {
-            for (int z = 0; z < sp1; z++)
-            {
-                index = (x * sp1 * sp1) + (z * sp1) - 1;
-                Profiler.BeginSample("Noise generation");
-                // Noise is the actual random noise. This should take into account temp/precip/etc.
-                noise = Instance.noiseGenerator.GetValue(
-                    offset.x + (x / Instance.scale / Instance.precision),
-                    offset.z + (z / Instance.scale / Instance.precision));
-                Profiler.EndSample();
-
-                // Clamps the perlin noise. This may cut off some mountains.
-                //noise = Mathf.Clamp (noise, 0f, 1f); 
-
-                // Multiply by the height scale (to normalize to an actual height value), and then
-                // divide by the number of points used. Because the sample points essentially cover a
-                // 1x1x1 unit cube, this division normalizes the noise value into the sample points' space.
-                // Finally, subtract the world chunk position, so that the noise is in [0, 1] iff we are
-                // looking at the right chunk.
-                noiseVal = (Instance.heightScale * noise / Instance.size) - position.y;
-
-                Profiler.BeginSample("Y axis computation");
-                // TODO store "data" in [x, z, y] format to help cache coherence?
-                for (int y = 0; y < sp1; y++)
-                {
-                    index++;
-                    if (SmoothValue == Smoothness.BLOCKY)
-                    {
-                        if (y * multiplier < noiseVal)
-                        {
-                            data[index] = 1;
-                            hasGround = true;
-                        }
-                        else
-                        {
-                            hasAir = true;
-                        }
-                    }
-                    else
-                    {
-
-                        //data[(x * sp1 * sp1) + (y * sp1) + z] = noiseVal;
-
-                        // Check if the current sample point is below the surface.
-                        if (y * multiplier < noiseVal)
-                        {
-                            data[index] = 1;
-                            hasGround = true;
-                        }
-                        else
-                        {
-                            hasAir = true;
-                            // If it isn't, this sample point is above the noise value surface.
-                            // We do an additional check on the point below us; if another point
-                            // below us is also above the surface, then this point needs to do nothing.
-                            // This can happen when y == 0.
-                            if ((y - 1) * multiplier > noiseVal)
-                            {
-                                break;
-                            }
-
-                            // The height difference between the noise and the next lowest sample point interval.
-                            // If e.g. there are 8 sample points, this will look at the next lowest 1/8 and
-                            // take the difference. Then, normalize to the range [0, 1].
-                            float difference = (noiseVal - ((y - 1) * multiplier)) / multiplier;
-
-                            // Upper point lerps from 0 to 0.5; lower point from 0.5 to 1.0
-                            data[index] = Mathf.Lerp(0f, 0.5f, difference);
-                            if (y > 0)
-                            {
-                                data[index - 1] = Mathf.Lerp(0.5f, 1f, difference);
-                            }
-                            break;
-                        }
-                    }
-                    // TODO add case for SmoothValue.SMOOTHER
-                }
-                Profiler.EndSample();
-
-                Profiler.BeginSample("Y=0 computation");
-                // Special case: When y == 0 and it is above the noise surface, we need to resolve it.
-                // We do this by checking in the mesh below it, for the contrapositive condition.
-                // This code eliminates vertical seams.
-                if (numPoints * multiplier < noiseVal && sp1 * multiplier > noiseVal)
-                {
-                    if (SmoothValue == Smoothness.BLOCKY)
-                    {
-                        data[(x * sp1 * sp1) + (z * sp1) + numPoints] = 1.0f;
-                    }
-                    else
-                    {
-                        float difference = (noiseVal - (numPoints * multiplier)) / multiplier;
-                        data[(x * sp1 * sp1) + (z * sp1) + numPoints] = Mathf.Lerp(0.5f, 1f, difference);
-                    }
-                }
-                // TODO add case for SmoothValue.SMOOTHER
-                Profiler.EndSample();
-            }
-        }
-
-        // If all our points are above the surface, or all of them are below the surface,
-        // then we won't need to render a mesh. Thus, we return null for the data.
-        isEmpty = hasAir ^ hasGround;
     }
 
     /**
@@ -650,6 +604,7 @@ public class Generator : MonoBehaviour {
         float noise;
         float noiseVal;
         for (int x = 0; x < sp1; x++) {
+            Profiler.BeginSample("Async data generation");
             for (int z = 0; z < sp1; z++) {
                 noise = Instance.noiseGenerator.GetValue(offset.x + (x / Instance.scale / Instance.precision), offset.z + (z / Instance.scale / Instance.precision));
                 noiseVal = (Instance.heightScale * noise / Instance.size) - position.y;
@@ -704,6 +659,7 @@ public class Generator : MonoBehaviour {
                     }
                 }
             }
+            Profiler.EndSample();
             yield return null; 
         }
         #endregion
@@ -712,7 +668,6 @@ public class Generator : MonoBehaviour {
             //TODO: Make an async version of marching cubes
             #region Perform Marching Cubes
 
-            Profiler.BeginSample("Marching cubes");
             // TODO reuse these lists
             List<Vector3> verts = new List<Vector3> (DEFAULT_VERTEX_BUFFER_SIZE); 
             List<int> tris = new List<int> (DEFAULT_TRI_BUFFER_SIZE);
@@ -722,14 +677,13 @@ public class Generator : MonoBehaviour {
             OptimizedMarching marching = new OptimizedMarching();
             marching.Surface = Instance.marchingSurface;
 
-            marching.Generate(data, sp1, sp1, sp1, verts, tris);
-            Profiler.EndSample();
-            yield return null;
+            //marching.Generate(data, sp1, sp1, sp1, verts, tris);
+            yield return Instance.StartCoroutine(marching.GenerateAsync(data, sp1, sp1, sp1, verts, tris));
 
             #endregion
 
             Profiler.BeginSample("Assigning mesh");
-            assignMesh (unfinishedObj, verts.ToArray (), tris.ToArray ());
+            assignMeshAsync(unfinishedObj, verts.ToArray (), tris.ToArray ());
             Profiler.EndSample();
             yield return null;
         }

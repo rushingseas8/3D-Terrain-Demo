@@ -1,10 +1,6 @@
 ﻿// Uncomment the following line to enable profiling
 //#define Profiling
 
-// Uncomment the following line to enable XZY ordering for the data
-// (Used for cache optimizing the 2D terrain generator)
-#define XZY_ORDERING
-
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
@@ -167,7 +163,7 @@ public class OptimizedMarching
         }
     }
 
-    public void GenerateXZY(float[] voxels, int width, int height, int depth, IList<Vector3> verts, IList<int> indices)
+    public IEnumerator GenerateAsync(float[] voxels, int width, int height, int depth, IList<Vector3> verts, IList<int> indices)
     {
         if (Surface > 0.0f)
         {
@@ -187,26 +183,24 @@ public class OptimizedMarching
 
         int[] yw = new int[height];
         for (int i = 0; i < height; i++) { yw[i] = i * width; }
-        //int[] zw = new int[height];
-        //for (int i = 0; i < height; i++) { zw[i] = i * width; }
 
         int[] zwh = new int[depth];
         for (int i = 0; i < depth; i++) { zwh[i] = i * wh; }
-        //int[] ywh = new int[depth];
-        //for (int i = 0; i < depth; i++) { ywh[i] = i * wh; }
+
+        yield return null; // First opportunity to return is after the initial setup
 
         for (x = 0; x < width - 1; x++)
         {
-            for (z = 0; z < height - 1; z++)
+            Profiler.BeginSample("Async marching cubes");
+            for (y = 0; y < height - 1; y++)
             {
-                for (y = 0; y < depth - 1; y++)
+                for (z = 0; z < depth - 1; z++)
                 {
                     //Get the values in the 8 neighbours which make up a cube
 #if (Profiling)
                     Profiler.BeginSample("Neighbor search");
 #endif
 
-                    //int baseIndex = x + zw[z] + ywh[y];
                     int baseIndex = x + yw[y] + zwh[z];
                     int b1 = baseIndex + 1;
                     int b1w = b1 + width;
@@ -299,9 +293,11 @@ public class OptimizedMarching
                     Profiler.EndSample ();
 #endif
 
-                }
-            }
-        }
+                } // Z loop
+            } // Y loop
+            Profiler.EndSample();
+            yield return null; // Chance to return after each outer loop
+        } // X loop
     }
 
     // TODO: Can optimize by not doing a cube at a time, and instead doing a whole plane at once and reusing.
@@ -332,27 +328,16 @@ public class OptimizedMarching
 
         for (x = 0; x < width - 1; x++)
         {
-#if (XZY_ORDERING)
-            for (z = 0; z < height - 1; z++)
-
-#else
             for (y = 0; y < height - 1; y++)
-#endif
             {
-#if (XZY_ORDERING)
-
-                for (y = 0; y < depth - 1; y++)
-                {
-#else
                 for (z = 0; z < depth - 1; z++)
                 {
-#endif
                 //Get the values in the 8 neighbours which make up a cube
 #if (Profiling)
                     Profiler.BeginSample("Neighbor search");
 #endif
 
-                int baseIndex = x + yw[y] + zwh[z];
+                    int baseIndex = x + yw[y] + zwh[z];
                     int b1 = baseIndex + 1;
                     int b1w = b1 + width;
                     int bw = baseIndex + width;
