@@ -175,6 +175,11 @@ public class Generator : MonoBehaviour {
     /// </summary>
     public static Vector3 MeshOffset => Instance.meshOffset;
 
+    public static bool UseDualMarchingCubes 
+    {
+        get => Instance.useDualMarchingCubes; set => Instance.useDualMarchingCubes = value;
+    }
+
     /// <summary>
     /// A 3D array of GameObjects representing the currently loaded terrain meshes.
     /// This gets shifted around and regenerated based on the player movement.
@@ -218,6 +223,9 @@ public class Generator : MonoBehaviour {
     [Range(1, 20)]
     private int renderRadius = 5;
     private int renderDiameter;
+
+    [SerializeField]
+    private bool useDualMarchingCubes = false;
 
     private float fogStrength;
 
@@ -388,6 +396,9 @@ public class Generator : MonoBehaviour {
     private static List<Vector3> MARCHING_CUBES_VERTS = new List<Vector3>(25000);
     private static List<int> MARCHING_CUBES_TRIS = new List<int>(25000);
 
+    public static int VERT_SUM = 0;
+    public static int TRI_SUM = 0;
+
     /**
      * Generates a GameObject given a position in world coordinates, and an array with 3D
      * terrain data. Used internally by Generator. If you want to create chunks, you most
@@ -415,14 +426,39 @@ public class Generator : MonoBehaviour {
             MARCHING_CUBES_TRIS.Clear();
             MARCHING_CUBES_TRIS.Capacity = 25000;
 
-            OptimizedMarching marching = new OptimizedMarching ();
-            marching.Surface = Instance.marchingSurface;
+            if (Instance.useDualMarchingCubes) 
+            {
+                // Note: Dual Marching Cubes needs an extra "skirt" of 2 points on the edge to
+                // properly tile with neighbors. Because each sample cube is essentially treated
+                // as a point in DMC, with normal MC run on top, you can think of this as the same
+                // actual number of extra points as normal MC.
+                DualMarching marching = new DualMarching();
+                marching.Generate(data,
+                    (int)(Instance.size * Instance.precision) + 2,
+                    (int)(Instance.size * Instance.precision) + 2,
+                    (int)(Instance.size * Instance.precision) + 2,
+                    MARCHING_CUBES_VERTS, MARCHING_CUBES_TRIS);
 
-            marching.Generate(data, 
-                              (int)(Instance.size * Instance.precision) + 1, 
-                              (int)(Instance.size * Instance.precision) + 1, 
-                              (int)(Instance.size * Instance.precision) + 1,
-                              MARCHING_CUBES_VERTS, MARCHING_CUBES_TRIS);
+                VERT_SUM += MARCHING_CUBES_VERTS.Count;
+                TRI_SUM += MARCHING_CUBES_TRIS.Count;
+            } else
+            {
+                OptimizedMarching marching = new OptimizedMarching ();
+                //Marching marching = new MarchingCubes();
+                marching.Surface = Instance.marchingSurface;
+
+                marching.Generate(data, 
+                    (int)(Instance.size * Instance.precision) + 1, 
+                    (int)(Instance.size * Instance.precision) + 1, 
+                    (int)(Instance.size * Instance.precision) + 1,
+                MARCHING_CUBES_VERTS, MARCHING_CUBES_TRIS);
+
+                VERT_SUM += MARCHING_CUBES_VERTS.Count;
+                TRI_SUM += MARCHING_CUBES_TRIS.Count;
+            }
+
+            //Debug.Log($"Generated {MARCHING_CUBES_VERTS.Count} vertices and {MARCHING_CUBES_TRIS.Count} tris.");
+
             Profiler.EndSample ();  
 
             Profiler.BeginSample ("Mesh assigning");
@@ -440,7 +476,7 @@ public class Generator : MonoBehaviour {
     public static float[] Generate2D(Vector3 position)
     {
         int numPoints = (int)(Instance.size * Instance.precision);
-        int sp1 = numPoints + 1;
+        int sp1 = Instance.useDualMarchingCubes ? numPoints + 2 : numPoints + 1;
         float[] data = new float[sp1 * sp1 * sp1];
         Generate2D(position, ref data, out bool isEmpty);
         //Generate2D_XZY(position, ref data, out bool isEmpty);
@@ -459,7 +495,7 @@ public class Generator : MonoBehaviour {
         int numPoints = (int)(Instance.size * Instance.precision);
 
         // We generate an extra vertex on each end to allow for seamless transitions.
-        int sp1 = numPoints + 1;
+        int sp1 = Instance.useDualMarchingCubes ? numPoints + 2 : numPoints + 1;
         //float[] data = new float[sp1 * sp1 * sp1];
 
         // This scale value transforms "position" (in integer chunk coords) to actual
@@ -593,7 +629,7 @@ public class Generator : MonoBehaviour {
         // Detailed comments are in the Generate2D method.
         int numPoints = (int)(Instance.size * Instance.precision);
 
-        int sp1 = numPoints + 1;
+        int sp1 = Instance.useDualMarchingCubes ? numPoints + 2 : numPoints + 1;
         float[] data = new float[sp1 * sp1 * sp1]; // TODO avoid re-creating this to avoid GC
 
         float offsetScale = numPoints / Instance.scale / Instance.precision;
@@ -705,7 +741,7 @@ public class Generator : MonoBehaviour {
         int numPoints = (int)(Instance.size * Instance.precision);
 
         // We generate an extra vertex on each end to allow for seamless transitions.
-        int sp1 = numPoints + 1;
+        int sp1 = Instance.useDualMarchingCubes ? numPoints + 2 : numPoints + 1;
         float[] data = new float[sp1 * sp1 * sp1];
 
         // This scale value transforms "position" (in integer chunk coords) to actual

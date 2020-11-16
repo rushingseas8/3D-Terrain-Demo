@@ -498,7 +498,7 @@ MonoBehaviour:
   precision: 1
   marchingSurface: 0.5
   smoothValue: 1
-  renderRadius: 15
+  renderRadius: 10
   GEN_OFFSET: {x: 1023, y: 1942, z: 7777}
   defaultMaterial: {fileID: 0}
   defaultPhysics: {fileID: 0}

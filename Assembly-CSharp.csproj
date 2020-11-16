@@ -106,6 +106,7 @@
     <Compile Include="Assets\Scripts\DataStructures\Chunk.cs" />
     <Compile Include="Assets\Scripts\DataStructures\CubeBuffer.cs" />
     <Compile Include="Assets\Scripts\DataStructures\CubeStorage.cs" />
+    <Compile Include="Assets\Scripts\DualMarching.cs" />
     <Compile Include="Assets\Scripts\EditorGenerator.cs" />
     <Compile Include="Assets\Scripts\FastNoise2.cs" />
     <Compile Include="Assets\Scripts\GameManager.cs" />

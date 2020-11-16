@@ -99,6 +99,8 @@ public class GameManager : MonoBehaviour {
 			GameObject.Destroy (GameObject.Find ("Sun"));
 			Generator.Generate (Generator.GenerateCave);
 		}
+
+        Debug.Log($"Generated {Generator.VERT_SUM} vertices and {Generator.TRI_SUM} tris.");
 	}
 
 	/*
