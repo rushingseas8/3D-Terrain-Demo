@@ -1,41 +1,34 @@
 ﻿using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.Profiling;
+using System.Runtime.CompilerServices;
 
 /// <summary>
-/// Basic idea of DMC:
-/// 
-/// (pulled from this)
+/// Basic idea of DMC summarized below:
 /// https://wordsandbuttons.online/interactive_explanation_of_marching_cubes_and_dual_contouring.html
 /// 
-/// 0. In MC, we look within a CUBE and if the function changes sign between vertices, we add a line between EDGES.
-///     On the other hand, in DMC, we look at EDGES, and if the function changes sign between vertices, we add a vertex at
-///     the centroid of the cube. This centroid is the average of the edge points.
-/// 1. Thus, one possible (citation needed) algorithm is to run MC on a given grid, and then use the edge points
-///     emitted to generate DMC points. 
-/// 2. We then need a custom algorithm to join these DMC points together. Specifically, we'll likely have to stitch from
-///     the edge points to the centroid to the edge points; this may have to be repeated depending on the exact case. This
-///     will allow us to handle boundary points, since then we won't have issues just connecting centroids (since one one exist).
-///     NB: this might be the annoying part, since we'll have to do cases manually. Oof. Edge cases also exist.
-/// 3. 
+/// This code was translated from a C++ implementation here:
+/// https://github.com/dominikwodniok/dualmc
 /// 
+/// It was then cleaned up and modified to work a bit better with C# and Unity.
 /// 
 /// </summary>
 public class DualMarching
 {
-    private float[] data;
+    //private float[] data;
     private int width, height, depth;
     private int[] dims;
     private float iso;
     private bool generateManifold = true;
 
-#region Static stuff
+    #region Static stuff
     /// Encodes the ambiguous face of cube configurations, which
     /// can cause non-manifold meshes.
     /// Non-problematic configurations have a value of 255.
     /// The first bit of each value actually encodes a positive or negative
     /// direction while the second and third bit enumerate the axis.
-    private static readonly int[] problematicConfigs = 
+    private static readonly int[] problematicConfigs =
     {
         255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,
         255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,
@@ -74,7 +67,7 @@ public class DualMarching
     // Encodes the edge vertices for the 256 marching cubes cases.
     // A marching cube case produces up to four faces and thus, up to four
     // dual points.
-    private static readonly int[,] dualPointsList = 
+    private static readonly int[,] dualPointsList =
     {
         {0, 0, 0, 0}, // 0
         {EDGE0|EDGE3|EDGE8, 0, 0, 0}, // 1
@@ -333,27 +326,24 @@ public class DualMarching
         {EDGE0|EDGE3|EDGE8, 0, 0, 0}, // 254
         {0, 0, 0, 0} // 255
     };
-#endregion
+    #endregion
 
-    public DualMarching(float surface = 0.5f) 
+    public DualMarching(float surface = 0.5f)
     {
         this.iso = surface;
     }
 
-    private struct Vertex
-    {
-        public float x, y, z;
-
-        public static explicit operator Vector3(Vertex v) => new Vector3(v.x, v.y, v.z);
-    }
-
-    private int gA(int x, int y, int z) 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private int gA(int x, int y, int z)
     {
         //Debug.Log($"X={x},Y={y},Z={z}. W/H/D={width}");
-        return x + width * (y + height * z);
+        Profiler.BeginSample("gA");
+        int toReturn = x + width * (y + height * z);
+        Profiler.EndSample();
+        return toReturn;
     }
 
-    private int GetCellCode(int cx, int cy, int cz) 
+    private int GetCellCode(float[] data, int cx, int cy, int cz)
     {
         // determine for each cube corner if it is outside or inside
         int code = 0;
@@ -376,8 +366,10 @@ public class DualMarching
         return code;
     }
 
-    private void CalculateDualPoint(int cx, int cy, int cz, int pointCode, out Vertex v) 
+    private Vector3 CalculateDualPoint(float[] data, int cx, int cy, int cz, int pointCode)
     {
+        Profiler.BeginSample("CalculateDualPoint");
+        Vector3 v;
         // initialize the point with lower voxel coordinates
         v.x = cx;
         v.y = cy;
@@ -385,7 +377,7 @@ public class DualMarching
 
         // compute the dual point as the mean of the face vertices belonging to the
         // original marching cubes face
-        Vertex p;
+        Vector3 p;
         p.x = 0;
         p.y = 0;
         p.z = 0;
@@ -486,18 +478,27 @@ public class DualMarching
         v.x += p.x;
         v.y += p.y;
         v.z += p.z;
+
+        Profiler.EndSample();
+        return v;
     }
 
-    private int GetDualPointCode(int cx, int cy, int cz, int edge) 
+    private static int _direction;
+    private static int[] _neighborCoords = new int[3];
+    private static int _component;
+    private static int _delta;
+
+    private int GetDualPointCode(float[] data, int cx, int cy, int cz, int edge)
     {
-        int cubeCode = GetCellCode(cx, cy, cz);
+        Profiler.BeginSample("GetDualPointCode");
+        int cubeCode = GetCellCode(data, cx, cy, cz);
 
         // is manifold dual marching cubes desired?
         if (generateManifold)
         {
             // The Manifold Dual Marching Cubes approach from Rephael Wenger as described in
             // chapter 3.3.5 of his book "Isosurfaces: Geometry, Topology, and Algorithms"
-            // is implemente here.
+            // is implemented here.
             // If a problematic C16 or C19 configuration shares the ambiguous face 
             // with another C16 or C19 configuration we simply invert the cube code
             // before looking up dual points. Doing this for these pairs ensures
@@ -505,26 +506,29 @@ public class DualMarching
             // But this removes the dualism to marching cubes.
 
             // check if we have a potentially problematic configuration
-            int direction = problematicConfigs[cubeCode];
+            _direction = problematicConfigs[cubeCode];
             // If the direction code is in {0,...,5} we have a C16 or C19 configuration.
-            if (direction != 255)
+            if (_direction != 255)
             {
                 // We have to check the neighboring cube, which shares the ambiguous
                 // face. For this we decode the direction. This could also be done
                 // with another lookup table.
                 // copy current cube coordinates into an array.
-                int[] neighborCoords = { cx, cy, cz };
+                //_neighborCoords = { cx, cy, cz };
+                _neighborCoords[0] = cx;
+                _neighborCoords[1] = cy;
+                _neighborCoords[2] = cz;
                 // get the dimension of the non-zero coordinate axis
-                int component = direction >> 1;
+                _component = _direction >> 1;
                 // get the sign of the direction
-                int delta = (direction & 1) == 1 ? 1 : -1;
+                _delta = (_direction & 1) == 1 ? 1 : -1;
                 // modify the correspong cube coordinate
-                neighborCoords[component] += delta;
+                _neighborCoords[_component] += _delta;
                 // have we left the volume in this direction?
-                if (neighborCoords[component] >= 0 && neighborCoords[component] < (dims[component] - 1))
+                if (_neighborCoords[_component] >= 0 && _neighborCoords[_component] < (dims[_component] - 1))
                 {
                     // get the cube configuration of the relevant neighbor
-                    int neighborCubeCode = GetCellCode(neighborCoords[0], neighborCoords[1], neighborCoords[2]);
+                    int neighborCubeCode = GetCellCode(data, _neighborCoords[0], _neighborCoords[1], _neighborCoords[2]);
                     // Look up the neighbor configuration ambiguous face direction.
                     // If the direction is valid we have a C16 or C19 neighbor.
                     // As C16 and C19 have exactly one ambiguous face this face is
@@ -540,17 +544,151 @@ public class DualMarching
 
         for (int i = 0; i < 4; i++)
         {
-            if ((dualPointsList[cubeCode,i] & edge) != 0)
+            if ((dualPointsList[cubeCode, i] & edge) != 0)
             {
-                return dualPointsList[cubeCode,i];
+                Profiler.EndSample();
+                return dualPointsList[cubeCode, i];
             }
         }
+        Profiler.EndSample();
         return 0;
     }
 
-    public void Generate(float[] data, int width, int height, int depth, IList<Vector3> verts, IList<int> indices) 
+    private static Matrix4x4 _mat = new Matrix4x4();
+
+    /// <summary>
+    /// Given four vertices, with A, B, C in CCW order, returns true if D is
+    /// contained within the circumcircle formed by A, B, C. 
+    /// 
+    /// This condition is 1:1 with whether we should prefer to triangulate the
+    /// quadrangle ABCD WITHOUT the triangle ABC. In other words, if this returns
+    /// true, we should flip an edge to avoid using triangle ABC.
+    /// 
+    /// </summary>
+    private bool ShouldFlip(Vector3 A, Vector3 B, Vector3 C, Vector3 D)
     {
-        this.data = data;
+        Profiler.BeginSample("ShouldFlip");
+        // A - D
+        // | \ |
+        // B - C
+        // Need to check if the angles B + D > 180.
+        // Thus we check ((BA) dot (BC)) + ((DA) dot (DC)).
+        Vector3 BA = A - B;
+        Vector3 BC = C - B;
+
+        Vector3 DA = A - D;
+        Vector3 DC = C - D;
+
+        float test = Vector3.Angle(BA, BC) + Vector3.Angle(DA, DC);
+        Profiler.EndSample();
+        return test >= 180.0f;
+
+    }
+
+    /// <summary>
+    /// Helper function for generating a quad given four vertices that are going
+    /// to be part of the mesh. 
+    /// 
+    /// TODO finish explaining the details of this
+    /// </summary>
+    /// <param name="A">A.</param>
+    /// <param name="B">B.</param>
+    /// <param name="C">C.</param>
+    /// <param name="D">D.</param>
+    /// <param name="entering">If <c>true</c>, we are entering this quad. Represents orientation.</param>
+    /// <param name="verts">Vertices list.</param>
+    private void AddQuad(Vector3 A, Vector3 B, Vector3 C, Vector3 D, bool entering, IList<Vector3> verts)
+    {
+        Profiler.BeginSample("AddQuad");
+        if (entering)
+        {
+            // Testing if this triangulation is NOT ideal:
+            // 0 - 3
+            // | / |
+            // 1 - 2
+            if (ShouldFlip(B, A, D, C))
+            {
+                // Not ideal, so use this one:
+                // 0 - 3
+                // | \ |
+                // 1 - 2
+                verts.Add(A);
+                verts.Add(D);
+                verts.Add(C);
+
+                verts.Add(B);
+                verts.Add(A);
+                verts.Add(C);
+            }
+            else
+            {
+                // 0, 1, 2, 3
+                // We're fine, use this triangulation:
+                // 0 - 3
+                // | / |
+                // 1 - 2
+                verts.Add(A);
+                verts.Add(D);
+                verts.Add(B);
+
+                verts.Add(B);
+                verts.Add(D);
+                verts.Add(C);
+            }
+        }
+        else
+        {
+            // Testing if this triangulation is NOT ideal:
+            // (Note that 1 and 3 are swapped from above, since we are exiting)
+            // 0 - 1
+            // | / |
+            // 3 - 2
+            if (ShouldFlip(D, A, B, C))
+            {
+                // NOT fine, so flip triangulation:
+                // 0 - 1
+                // | \ |
+                // 3 - 2
+                verts.Add(A);
+                verts.Add(B);
+                verts.Add(C);
+
+                verts.Add(D);
+                verts.Add(A);
+                verts.Add(C);
+            }
+            else
+            {
+                // 0, 3, 2, 1
+                // We're fine, use this triangulation:
+                // 0 - 1
+                // | / |
+                // 3 - 2
+                verts.Add(A);
+                verts.Add(B);
+                verts.Add(D);
+
+                verts.Add(D);
+                verts.Add(B);
+                verts.Add(C);
+            }
+        }
+        Profiler.EndSample();
+    }
+
+    private bool IsSkinny(Vector3 A, Vector3 B, Vector3 C) 
+    {
+        Vector3 BA = A - B;
+        Vector3 CB = B - C;
+        Vector3 CA = A - C;
+
+        return (Vector3.Angle(BA, CB) < 15.0) || (Vector3.Angle(CB, CA) < 15.0) || (Vector3.Angle(CA, BA) < 15.0);
+    }
+
+    public void Generate(float[] data, int width, int height, int depth, IList<Vector3> verts, IList<int> indices)
+    {
+        Profiler.BeginSample("Generate");
+        //this.data = data;
         this.width = width;
         this.height = height;
         this.depth = depth;
@@ -560,62 +698,49 @@ public class DualMarching
         int reducedY = height - 1;
         int reducedZ = depth - 1;
 
-        Vertex vertex0;
-        Vertex vertex1;
-        Vertex vertex2;
-        Vertex vertex3;
+        Vector3 vertex0;
+        Vector3 vertex1;
+        Vector3 vertex2;
+        Vector3 vertex3;
         int pointCode;
 
-        List<Vertex> vertices = new List<Vertex>();
+        float center;
+        float offset;
 
+        List<Vector3> vertices = new List<Vector3>();
+
+        Profiler.BeginSample("Triple for loops");
         // iterate voxels
         for (int z = 0; z < reducedZ; ++z)
+        {
             for (int y = 0; y < reducedY; ++y)
+            {
                 for (int x = 0; x < reducedX; ++x)
                 {
+                    center = data[gA(x, y, z)];
                     // construct quad for x edge
                     if (z > 0 && y > 0)
                     {
                         // is edge intersected?
-                        bool entering = data[gA(x, y, z)] < iso && data[gA(x + 1, y, z)] >= iso;
-                        bool exiting  = data[gA(x, y, z)] >= iso && data[gA(x + 1, y, z)] < iso;
+                        offset = data[gA(x + 1, y, z)];
+                        bool entering = center < iso && offset >= iso;
+                        bool exiting = center >= iso && offset < iso;
                         if (entering || exiting)
                         {
                             // generate quad
-                            pointCode = GetDualPointCode(x, y, z, EDGE0);
-                            CalculateDualPoint(x, y, z, pointCode, out vertex0);
+                            pointCode = GetDualPointCode(data, x, y, z, EDGE0);
+                            vertex0 = CalculateDualPoint(data, x, y, z, pointCode);
 
-                            pointCode = GetDualPointCode(x, y, z - 1, EDGE2);
-                            CalculateDualPoint(x, y, z - 1, pointCode, out vertex1);
+                            pointCode = GetDualPointCode(data, x, y, z - 1, EDGE2);
+                            vertex1 = CalculateDualPoint(data, x, y, z - 1, pointCode);
 
-                            pointCode = GetDualPointCode(x, y - 1, z - 1, EDGE6);
-                            CalculateDualPoint(x, y - 1, z - 1, pointCode, out vertex2);
+                            pointCode = GetDualPointCode(data, x, y - 1, z - 1, EDGE6);
+                            vertex2 = CalculateDualPoint(data, x, y - 1, z - 1, pointCode);
 
-                            pointCode = GetDualPointCode(x, y - 1, z, EDGE4);
-                            CalculateDualPoint(x, y - 1, z, pointCode, out vertex3);
+                            pointCode = GetDualPointCode(data, x, y - 1, z, EDGE4);
+                            vertex3 = CalculateDualPoint(data, x, y - 1, z, pointCode);
 
-                            if (entering)
-                            {
-                                // 0, 1, 2, 3
-                                vertices.Add(vertex0);
-                                vertices.Add(vertex1);
-                                vertices.Add(vertex3);
-
-                                vertices.Add(vertex1);
-                                vertices.Add(vertex2);
-                                vertices.Add(vertex3);
-                            }
-                            else
-                            {
-                                // 0, 3, 2, 1
-                                vertices.Add(vertex0);
-                                vertices.Add(vertex3);
-                                vertices.Add(vertex1);
-
-                                vertices.Add(vertex3);
-                                vertices.Add(vertex2);
-                                vertices.Add(vertex1);
-                            }
+                            AddQuad(vertex0, vertex1, vertex2, vertex3, exiting, verts); // Note exiting, not entering 
                         }
                     }
 
@@ -623,45 +748,25 @@ public class DualMarching
                     if (z > 0 && x > 0)
                     {
                         // is edge intersected?
-                        bool entering = data[gA(x, y, z)] < iso && data[gA(x, y + 1, z)] >= iso;
-                        bool exiting  = data[gA(x, y, z)] >= iso && data[gA(x, y + 1, z)] < iso;
+                        offset = data[gA(x, y + 1, z)];
+                        bool entering = center < iso && offset >= iso;
+                        bool exiting = center >= iso && offset < iso;
                         if (entering || exiting)
                         {
                             // generate quad
-                            pointCode = GetDualPointCode(x, y, z, EDGE8);
-                            CalculateDualPoint(x, y, z, pointCode, out vertex0);
+                            pointCode = GetDualPointCode(data, x, y, z, EDGE8);
+                            vertex0 = CalculateDualPoint(data, x, y, z, pointCode);
 
-                            pointCode = GetDualPointCode(x, y, z - 1, EDGE11);
-                            CalculateDualPoint(x, y, z - 1, pointCode, out vertex1);
+                            pointCode = GetDualPointCode(data, x, y, z - 1, EDGE11);
+                            vertex1 = CalculateDualPoint(data, x, y, z - 1, pointCode);
 
-                            pointCode = GetDualPointCode(x - 1, y, z - 1, EDGE10);
-                            CalculateDualPoint(x - 1, y, z - 1, pointCode, out vertex2);
+                            pointCode = GetDualPointCode(data, x - 1, y, z - 1, EDGE10);
+                            vertex2 = CalculateDualPoint(data, x - 1, y, z - 1, pointCode);
 
-                            pointCode = GetDualPointCode(x - 1, y, z, EDGE9);
-                            CalculateDualPoint(x - 1, y, z, pointCode, out vertex3);
+                            pointCode = GetDualPointCode(data, x - 1, y, z, EDGE9);
+                            vertex3 = CalculateDualPoint(data, x - 1, y, z, pointCode);
 
-                            if (entering)
-                            {
-                                // 0, 1, 2, 3
-                                vertices.Add(vertex0);
-                                vertices.Add(vertex3);
-                                vertices.Add(vertex1);
-
-                                vertices.Add(vertex1);
-                                vertices.Add(vertex3);
-                                vertices.Add(vertex2);
-                            }
-                            else
-                            {
-                                // 0, 3, 2, 1
-                                vertices.Add(vertex0);
-                                vertices.Add(vertex1);
-                                vertices.Add(vertex3);
-
-                                vertices.Add(vertex3);
-                                vertices.Add(vertex1);
-                                vertices.Add(vertex2);
-                            }
+                            AddQuad(vertex0, vertex1, vertex2, vertex3, entering, verts); 
                         }
                     }
 
@@ -669,63 +774,34 @@ public class DualMarching
                     if (x > 0 && y > 0)
                     {
                         // is edge intersected?
-                        bool entering = data[gA(x, y, z)] < iso && data[gA(x, y, z + 1)] >= iso;
-                        bool exiting  = data[gA(x, y, z)] >= iso && data[gA(x, y, z + 1)] < iso;
+                        offset = data[gA(x, y, z + 1)];
+                        bool entering = center < iso && offset >= iso;
+                        bool exiting = center >= iso && offset < iso;
                         if (entering || exiting)
                         {
                             // generate quad
-                            pointCode = GetDualPointCode(x, y, z, EDGE3);
-                            CalculateDualPoint(x, y, z, pointCode, out vertex0);
+                            pointCode = GetDualPointCode(data, x, y, z, EDGE3);
+                            vertex0 = CalculateDualPoint(data, x, y, z, pointCode);
 
-                            pointCode = GetDualPointCode(x - 1, y, z, EDGE1);
-                            CalculateDualPoint(x - 1, y, z, pointCode, out vertex1);
+                            pointCode = GetDualPointCode(data, x - 1, y, z, EDGE1);
+                            vertex1 = CalculateDualPoint(data, x - 1, y, z, pointCode);
 
-                            pointCode = GetDualPointCode(x - 1, y - 1, z, EDGE5);
-                            CalculateDualPoint(x - 1, y - 1, z, pointCode, out vertex2);
+                            pointCode = GetDualPointCode(data, x - 1, y - 1, z, EDGE5);
+                            vertex2 = CalculateDualPoint(data, x - 1, y - 1, z, pointCode);
 
-                            pointCode = GetDualPointCode(x, y - 1, z, EDGE7);
-                            CalculateDualPoint(x, y - 1, z, pointCode, out vertex3);
+                            pointCode = GetDualPointCode(data, x, y - 1, z, EDGE7);
+                            vertex3 = CalculateDualPoint(data, x, y - 1, z, pointCode);
 
-                            if (entering)
-                            {
-                                // 0, 1, 2, 3
-                                // 0 - 3
-                                // |   |
-                                // 1 - 2
-                                vertices.Add(vertex0);
-                                vertices.Add(vertex3);
-                                vertices.Add(vertex1);
-
-                                vertices.Add(vertex1);
-                                vertices.Add(vertex3);
-                                vertices.Add(vertex2);
-                            }
-                            else
-                            {
-                                // 0, 3, 2, 1
-                                // 0 - 1
-                                // |   |
-                                // 3 - 2
-                                vertices.Add(vertex0);
-                                vertices.Add(vertex1);
-                                vertices.Add(vertex3);
-
-                                vertices.Add(vertex3);
-                                vertices.Add(vertex1);
-                                vertices.Add(vertex2);
-                            }
+                            AddQuad(vertex0, vertex1, vertex2, vertex3, entering, verts);
                         }
                     }
                 }
-
-        // correction factor
-        float CF = 1f;
-        foreach (Vertex vert in vertices) 
-        {
-            verts.Add(new Vector3(CF * vert.x, CF * vert.y, CF * vert.z));
+            }
         }
+        Profiler.EndSample();
 
-        for (int i = 0; i < vertices.Count / 6; i++) 
+        Profiler.BeginSample("Triangle generation");
+        for (int i = 0; i < verts.Count / 6; i++)
         {
             indices.Add((i * 6) + 0);
             indices.Add((i * 6) + 1);
@@ -735,14 +811,93 @@ public class DualMarching
             indices.Add((i * 6) + 4);
             indices.Add((i * 6) + 5);
         }
+        Profiler.EndSample();
 
-        // generate triangle soup quads
-        //size_t const numQuads = vertices.size() / 4;
-        //quads.reserve(numQuads);
-        //for (size_t i = 0; i < numQuads; ++i)
+        // TODO find a better way to remove skinnies
+
+
+        //int countSkinny = 0;
+        //for (int i = 0; i < indices.Count - 2; i += 3) 
         //{
-        //    quads.emplace_back(i * 4, i * 4 + 1, i * 4 + 2, i * 4 + 3);
-        //}
+        //    Vector3 A = verts[indices[i + 0]];
+        //    Vector3 B = verts[indices[i + 1]];
+        //    Vector3 C = verts[indices[i + 2]];
 
+        //    Vector3 BA = A - B;
+        //    Vector3 CB = B - C;
+        //    Vector3 CA = A - C;
+
+        //    float AngleA = Vector3.Angle(BA, CA);
+        //    float AngleB = Vector3.Angle(BA, CB);
+        //    float AngleC = Vector3.Angle(CB, CA);
+
+        //    float minAngle = Mathf.Min(AngleA, AngleB, AngleC);
+        //    if (minAngle >= 10.0f) 
+        //    {
+        //        continue;
+        //    }
+
+        //    // A is smallest angle. So pick furthest other point to draw line..
+        //    if (Mathf.Approximately(minAngle, AngleA))
+        //    {
+        //        // C furthest, so merge B into AC
+        //        if (CA.magnitude > BA.magnitude) 
+        //        {
+        //            // Find projection point & rewrite point B to be this point.
+        //            Vector3 Bp = B + Vector3.Project(BA, CA);
+        //            verts[indices[i + 1]] = Bp;
+        //            continue;
+        //        }
+        //        else // B furthest, so merge C into BC 
+        //        {
+        //            Vector3 Cp = C + Vector3.Project(CA, CB);
+        //            verts[indices[i + 2]] = Cp;
+        //            continue;
+        //        }
+        //    }
+        //    // B is smallest angle.
+        //    else if (Mathf.Approximately(minAngle, AngleB)) 
+        //    {
+        //        // C furthest, so merge A into BC
+        //        if (CB.magnitude > BA.magnitude) 
+        //        {
+        //            Vector3 Ap = A + Vector3.Project(BA, CB);
+        //            verts[indices[i + 0]] = Ap;
+        //            continue;
+        //        }
+        //        else // A furthest, so merge C into AC
+        //        {
+        //            Vector3 Cp = C + Vector3.Project(CB, CA);
+        //            verts[indices[i + 2]] = Cp;
+        //            continue;
+        //        }
+        //    }
+        //    // C is smallest angle (or a tie, so it's arbitrary)
+        //    else 
+        //    {
+        //        // B furthest, so merge A into BC
+        //        if (CB.magnitude > CA.magnitude) 
+        //        {
+        //            Vector3 Ap = A + Vector3.Project(CA, CB);
+        //            verts[indices[i + 0]] = Ap;
+        //            continue;
+        //        }
+        //        else // A furthest, so merge B into AC 
+        //        {
+        //            Vector3 Bp = B + Vector3.Project(CB, CA);
+        //            verts[indices[i + 1]] = Bp;
+        //            continue;
+        //        }
+        //    }
+
+        //    //if (IsSkinny(verts[indices[i]], verts[indices[i + 1]], verts[indices[i + 2]])) 
+        //    //{
+
+        //    //    //countSkinny++;
+        //    //}
+        //}
+        //Debug.Log($"Found {countSkinny} skinny triangles, out of {indices.Count / 3} total.");
+
+        Profiler.EndSample();
     }
 }

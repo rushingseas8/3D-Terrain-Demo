@@ -498,12 +498,13 @@ MonoBehaviour:
   precision: 1
   marchingSurface: 0.5
   smoothValue: 1
-  renderRadius: 10
+  renderRadius: 5
+  useDualMarchingCubes: 1
   GEN_OFFSET: {x: 1023, y: 1942, z: 7777}
   defaultMaterial: {fileID: 0}
   defaultPhysics: {fileID: 0}
   noiseGenerator:
-    octaves: 8
+    octaves: 12
     frequency: 1
     lacunarity: 2
     persistence: 0.5
