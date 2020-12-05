@@ -406,7 +406,7 @@ public class Generator : MonoBehaviour {
      */
     public static GameObject generateObj(Vector3 position, float[] data) 
     {
-        Profiler.BeginSample("GenerateObj");
+        Profiler.BeginSample("GenerateObj"); 
         GameObject toReturn = null;
         if (data != null)
         {
@@ -434,9 +434,9 @@ public class Generator : MonoBehaviour {
                 // actual number of extra points as normal MC.
                 DualMarching marching = new DualMarching();
                 marching.Generate(data,
-                    (int)(Instance.size * Instance.precision) + 2,
-                    (int)(Instance.size * Instance.precision) + 2,
-                    (int)(Instance.size * Instance.precision) + 2,
+                    (int)(Instance.size * Instance.precision) + 3,
+                    (int)(Instance.size * Instance.precision) + 3,
+                    (int)(Instance.size * Instance.precision) + 3,
                     MARCHING_CUBES_VERTS, MARCHING_CUBES_TRIS);
 
                 VERT_SUM += MARCHING_CUBES_VERTS.Count;
@@ -476,7 +476,7 @@ public class Generator : MonoBehaviour {
     public static float[] Generate2D(Vector3 position)
     {
         int numPoints = (int)(Instance.size * Instance.precision);
-        int sp1 = Instance.useDualMarchingCubes ? numPoints + 2 : numPoints + 1;
+        int sp1 = Instance.useDualMarchingCubes ? numPoints + 3 : numPoints + 1;
         float[] data = new float[sp1 * sp1 * sp1];
         Generate2D(position, ref data, out bool isEmpty);
         //Generate2D_XZY(position, ref data, out bool isEmpty);
@@ -495,7 +495,7 @@ public class Generator : MonoBehaviour {
         int numPoints = (int)(Instance.size * Instance.precision);
 
         // We generate an extra vertex on each end to allow for seamless transitions.
-        int sp1 = Instance.useDualMarchingCubes ? numPoints + 2 : numPoints + 1;
+        int sp1 = Instance.useDualMarchingCubes ? numPoints + 3 : numPoints + 1;
         //float[] data = new float[sp1 * sp1 * sp1];
 
         // This scale value transforms "position" (in integer chunk coords) to actual
@@ -619,17 +619,17 @@ public class Generator : MonoBehaviour {
      */
     public static IEnumerator Generate2DAsync(Vector3 position, GameObject unfinishedObj)
     {
-        #region Assign position data
+#region Assign position data
         unfinishedObj.transform.position = new Vector3(position.z * Instance.size, position.y * Instance.size, position.x * Instance.size) - Instance.meshOffset;
         unfinishedObj.transform.localScale = new Vector3(1.0f / Instance.precision, 1.0f / Instance.precision, 1.0f / Instance.precision);
         unfinishedObj.name = "(" + position.x + " ," + position.y + " ," + position.z + ")";
-        #endregion
+#endregion
 
-        #region Generate data
+#region Generate data
         // Detailed comments are in the Generate2D method.
         int numPoints = (int)(Instance.size * Instance.precision);
 
-        int sp1 = Instance.useDualMarchingCubes ? numPoints + 2 : numPoints + 1;
+        int sp1 = Instance.useDualMarchingCubes ? numPoints + 3 : numPoints + 1;
         float[] data = new float[sp1 * sp1 * sp1]; // TODO avoid re-creating this to avoid GC
 
         float offsetScale = numPoints / Instance.scale / Instance.precision;
@@ -698,11 +698,11 @@ public class Generator : MonoBehaviour {
             Profiler.EndSample();
             yield return null; 
         }
-        #endregion
+#endregion
 
         if (hasNonzero) {
             //TODO: Make an async version of marching cubes
-            #region Perform Marching Cubes
+#region Perform Marching Cubes
 
             // TODO reuse these lists
             List<Vector3> verts = new List<Vector3> (DEFAULT_VERTEX_BUFFER_SIZE); 
@@ -716,7 +716,7 @@ public class Generator : MonoBehaviour {
             //marching.Generate(data, sp1, sp1, sp1, verts, tris);
             yield return Instance.StartCoroutine(marching.GenerateAsync(data, sp1, sp1, sp1, verts, tris));
 
-            #endregion
+#endregion
 
             Profiler.BeginSample("Assigning mesh");
             assignMeshAsync(unfinishedObj, verts.ToArray (), tris.ToArray ());
@@ -741,7 +741,7 @@ public class Generator : MonoBehaviour {
         int numPoints = (int)(Instance.size * Instance.precision);
 
         // We generate an extra vertex on each end to allow for seamless transitions.
-        int sp1 = Instance.useDualMarchingCubes ? numPoints + 2 : numPoints + 1;
+        int sp1 = Instance.useDualMarchingCubes ? numPoints + 3 : numPoints + 1;
         float[] data = new float[sp1 * sp1 * sp1];
 
         // This scale value transforms "position" (in integer chunk coords) to actual
@@ -778,7 +778,7 @@ public class Generator : MonoBehaviour {
         }
         yield return null;
 
-        #region Create data
+#region Create data
 
         int sp1 = Instance.size + 1;
         float[] data = new float[sp1 * sp1 * sp1];
@@ -799,9 +799,9 @@ public class Generator : MonoBehaviour {
             yield return null;
         }
 
-        #endregion
+#endregion
 
-        #region Perform Marching Cubes
+#region Perform Marching Cubes
 
         List<Vector3> verts = new List<Vector3> (DEFAULT_VERTEX_BUFFER_SIZE); 
         List<int> tris = new List<int> (DEFAULT_TRI_BUFFER_SIZE);
@@ -812,7 +812,7 @@ public class Generator : MonoBehaviour {
         marching.Generate(data, sp1, sp1, sp1, verts, tris);
         yield return null;
 
-        #endregion
+#endregion
 
         assignMesh (unfinishedObj, verts.ToArray (), tris.ToArray ());
         yield return null;

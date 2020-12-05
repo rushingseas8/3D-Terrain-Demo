@@ -1,4 +1,6 @@
-﻿using System.Collections;
+﻿#define PROFILE
+
+using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Profiling;
@@ -337,38 +339,107 @@ public class DualMarching
     private int gA(int x, int y, int z)
     {
         //Debug.Log($"X={x},Y={y},Z={z}. W/H/D={width}");
-        Profiler.BeginSample("gA");
+#if PROFILE
+        //Profiler.BeginSample("gA");
+#endif
         int toReturn = x + width * (y + height * z);
-        Profiler.EndSample();
+#if PROFILE
+        //Profiler.EndSample();
+#endif
         return toReturn;
+    }
+
+    private int[] cellCodes;
+
+    private void ComputeCellCodes(float[] data)
+    {
+        // Lazy initialization of the array: only if it needs resizing
+        if (cellCodes == null || (cellCodes.Length != (width * height * depth)))
+        {
+            cellCodes = new int[width * height * depth];
+        }
+
+        // determine for each cube corner if it is outside or inside
+        for (int cz = 0; cz < depth - 1; cz++)
+        {
+            for (int cy = 0; cy < height - 1; cy++)
+            {
+                for (int cx = 0; cx < width - 1; cx++)
+                {
+                    int code = 0;
+                    if (data[gA(cx, cy, cz)] >= iso)
+                        code |= 1;
+                    if (data[gA(cx + 1, cy, cz)] >= iso)
+                        code |= 2;
+                    if (data[gA(cx, cy + 1, cz)] >= iso)
+                        code |= 4;
+                    if (data[gA(cx + 1, cy + 1, cz)] >= iso)
+                        code |= 8;
+                    if (data[gA(cx, cy, cz + 1)] >= iso)
+                        code |= 16;
+                    if (data[gA(cx + 1, cy, cz + 1)] >= iso)
+                        code |= 32;
+                    if (data[gA(cx, cy + 1, cz + 1)] >= iso)
+                        code |= 64;
+                    if (data[gA(cx + 1, cy + 1, cz + 1)] >= iso)
+                        code |= 128;
+
+                    cellCodes[gA(cx, cy, cz)] = code;
+                }
+            }
+        }
     }
 
     private int GetCellCode(float[] data, int cx, int cy, int cz)
     {
-        // determine for each cube corner if it is outside or inside
-        int code = 0;
-        if (data[gA(cx, cy, cz)] >= iso)
-            code |= 1;
-        if (data[gA(cx + 1, cy, cz)] >= iso)
-            code |= 2;
-        if (data[gA(cx, cy + 1, cz)] >= iso)
-            code |= 4;
-        if (data[gA(cx + 1, cy + 1, cz)] >= iso)
-            code |= 8;
-        if (data[gA(cx, cy, cz + 1)] >= iso)
-            code |= 16;
-        if (data[gA(cx + 1, cy, cz + 1)] >= iso)
-            code |= 32;
-        if (data[gA(cx, cy + 1, cz + 1)] >= iso)
-            code |= 64;
-        if (data[gA(cx + 1, cy + 1, cz + 1)] >= iso)
-            code |= 128;
-        return code;
+
+
+        //int code = 0;
+        //if (data[gA(cx, cy, cz)] >= iso)
+        //    code |= 1;
+        //if (data[gA(cx + 1, cy, cz)] >= iso)
+        //    code |= 2;
+        //if (data[gA(cx, cy + 1, cz)] >= iso)
+        //    code |= 4;
+        //if (data[gA(cx + 1, cy + 1, cz)] >= iso)
+        //    code |= 8;
+        //if (data[gA(cx, cy, cz + 1)] >= iso)
+        //    code |= 16;
+        //if (data[gA(cx + 1, cy, cz + 1)] >= iso)
+        //    code |= 32;
+        //if (data[gA(cx, cy + 1, cz + 1)] >= iso)
+        //    code |= 64;
+        //if (data[gA(cx + 1, cy + 1, cz + 1)] >= iso)
+        //    code |= 128;
+
+        return cellCodes[gA(cx, cy, cz)];
+
+        //if (data[(cx + 0) + width * ((cy + 0) + height * (cz + 0))] >= iso)
+        //    code |= 1;
+        //if (data[(cx + 1) + width * ((cy + 0) + height * (cz + 0))] >= iso)
+        //    code |= 2;
+        //if (data[(cx + 0) + width * ((cy + 1) + height * (cz + 0))] >= iso)
+        //    code |= 4;
+        //if (data[(cx + 1) + width * ((cy + 1) + height * (cz + 0))] >= iso)
+        //    code |= 8;
+        //if (data[(cx + 0) + width * ((cy + 0) + height * (cz + 1))] >= iso)
+        //    code |= 16;
+        //if (data[(cx + 1) + width * ((cy + 0) + height * (cz + 1))] >= iso)
+        //    code |= 32;
+        //if (data[(cx + 0) + width * ((cy + 1) + height * (cz + 1))] >= iso)
+        //    code |= 64;
+        //if (data[(cx + 1) + width * ((cy + 1) + height * (cz + 1))] >= iso)
+        //    code |= 128;
+
+
+        //return code;
     }
 
     private Vector3 CalculateDualPoint(float[] data, int cx, int cy, int cz, int pointCode)
     {
+#if PROFILE
         Profiler.BeginSample("CalculateDualPoint");
+#endif
         Vector3 v;
         // initialize the point with lower voxel coordinates
         v.x = cx;
@@ -383,36 +454,54 @@ public class DualMarching
         p.z = 0;
         int points = 0;
 
+        // Prefetch values that will likely be used
+        // This optimization works best when the mesh is expected to be dense.
+        // If the mesh is expected to be sparse, it may be best to conditionally prefetch 
+        // (i.e., check if the value will be used by checking edge values)
+        float x0y0z0 = data[gA(cx, cy, cz)];
+        float x1y0z0 = data[gA(cx + 1, cy, cz)];
+        float x0y1z0 = data[gA(cx, cy + 1, cz)];
+        float x1y1z0 = data[gA(cx + 1, cy + 1, cz)];
+        float x0y0z1 = data[gA(cx, cy, cz + 1)];
+        float x1y0z1 = data[gA(cx + 1, cy, cz + 1)];
+        float x0y1z1 = data[gA(cx, cy + 1, cz + 1)];
+        float x1y1z1 = data[gA(cx + 1, cy + 1, cz + 1)];
+
         // sum edge intersection vertices using the point code
         if ((pointCode & EDGE0) != 0)
         {
-            p.x += ((float)iso - (float)data[gA(cx, cy, cz)]) / ((float)data[gA(cx + 1, cy, cz)] - (float)data[gA(cx, cy, cz)]);
+            //p.x += ((float)iso - (float)data[gA(cx, cy, cz)]) / ((float)data[gA(cx + 1, cy, cz)] - (float)data[gA(cx, cy, cz)]);
+            p.x += (iso - x0y0z0) / (x1y0z0 - x0y0z0);
             points++;
         }
 
         if ((pointCode & EDGE1) != 0)
         {
             p.x += 1.0f;
-            p.z += ((float)iso - (float)data[gA(cx + 1, cy, cz)]) / ((float)data[gA(cx + 1, cy, cz + 1)] - (float)data[gA(cx + 1, cy, cz)]);
+            //p.z += ((float)iso - (float)data[gA(cx + 1, cy, cz)]) / ((float)data[gA(cx + 1, cy, cz + 1)] - (float)data[gA(cx + 1, cy, cz)]);
+            p.z += (iso - x1y0z0) / (x1y0z1 - x1y0z0);
             points++;
         }
 
         if ((pointCode & EDGE2) != 0)
         {
-            p.x += ((float)iso - (float)data[gA(cx, cy, cz + 1)]) / ((float)data[gA(cx + 1, cy, cz + 1)] - (float)data[gA(cx, cy, cz + 1)]);
+            //p.x += ((float)iso - (float)data[gA(cx, cy, cz + 1)]) / ((float)data[gA(cx + 1, cy, cz + 1)] - (float)data[gA(cx, cy, cz + 1)]);
+            p.x += (iso - x0y0z1) / (x1y0z1 - x0y0z1);
             p.z += 1.0f;
             points++;
         }
 
         if ((pointCode & EDGE3) != 0)
         {
-            p.z += ((float)iso - (float)data[gA(cx, cy, cz)]) / ((float)data[gA(cx, cy, cz + 1)] - (float)data[gA(cx, cy, cz)]);
+            //p.z += ((float)iso - (float)data[gA(cx, cy, cz)]) / ((float)data[gA(cx, cy, cz + 1)] - (float)data[gA(cx, cy, cz)]);
+            p.z += (iso - x0y0z0) / (x0y0z1 - x0y0z0);
             points++;
         }
 
         if ((pointCode & EDGE4) != 0)
         {
-            p.x += ((float)iso - (float)data[gA(cx, cy + 1, cz)]) / ((float)data[gA(cx + 1, cy + 1, cz)] - (float)data[gA(cx, cy + 1, cz)]);
+            //p.x += ((float)iso - (float)data[gA(cx, cy + 1, cz)]) / ((float)data[gA(cx + 1, cy + 1, cz)] - (float)data[gA(cx, cy + 1, cz)]);
+            p.x += (iso - x0y1z0) / (x1y1z0 - x0y1z0);
             p.y += 1.0f;
             points++;
         }
@@ -420,14 +509,16 @@ public class DualMarching
         if ((pointCode & EDGE5) != 0)
         {
             p.x += 1.0f;
-            p.z += ((float)iso - (float)data[gA(cx + 1, cy + 1, cz)]) / ((float)data[gA(cx + 1, cy + 1, cz + 1)] - (float)data[gA(cx + 1, cy + 1, cz)]);
+            //p.z += ((float)iso - (float)data[gA(cx + 1, cy + 1, cz)]) / ((float)data[gA(cx + 1, cy + 1, cz + 1)] - (float)data[gA(cx + 1, cy + 1, cz)]);
+            p.z += (iso - x1y1z0) / (x1y1z1 - x1y1z0);
             p.y += 1.0f;
             points++;
         }
 
         if ((pointCode & EDGE6) != 0)
         {
-            p.x += ((float)iso - (float)data[gA(cx, cy + 1, cz + 1)]) / ((float)data[gA(cx + 1, cy + 1, cz + 1)] - (float)data[gA(cx, cy + 1, cz + 1)]);
+            //p.x += ((float)iso - (float)data[gA(cx, cy + 1, cz + 1)]) / ((float)data[gA(cx + 1, cy + 1, cz + 1)] - (float)data[gA(cx, cy + 1, cz + 1)]);
+            p.x += (iso - x0y1z1) / (x1y1z1 - x0y1z1);
             p.z += 1.0f;
             p.y += 1.0f;
             points++;
@@ -435,28 +526,32 @@ public class DualMarching
 
         if ((pointCode & EDGE7) != 0)
         {
-            p.z += ((float)iso - (float)data[gA(cx, cy + 1, cz)]) / ((float)data[gA(cx, cy + 1, cz + 1)] - (float)data[gA(cx, cy + 1, cz)]);
+            //p.z += ((float)iso - (float)data[gA(cx, cy + 1, cz)]) / ((float)data[gA(cx, cy + 1, cz + 1)] - (float)data[gA(cx, cy + 1, cz)]);
+            p.z += (iso - x0y1z0) / (x0y1z1 - x0y1z0);
             p.y += 1.0f;
             points++;
         }
 
         if ((pointCode & EDGE8) != 0)
         {
-            p.y += ((float)iso - (float)data[gA(cx, cy, cz)]) / ((float)data[gA(cx, cy + 1, cz)] - (float)data[gA(cx, cy, cz)]);
+            //p.y += ((float)iso - (float)data[gA(cx, cy, cz)]) / ((float)data[gA(cx, cy + 1, cz)] - (float)data[gA(cx, cy, cz)]);
+            p.y += (iso - x0y0z0) / (x0y1z0 - x0y0z0);
             points++;
         }
 
         if ((pointCode & EDGE9) != 0)
         {
             p.x += 1.0f;
-            p.y += ((float)iso - (float)data[gA(cx + 1, cy, cz)]) / ((float)data[gA(cx + 1, cy + 1, cz)] - (float)data[gA(cx + 1, cy, cz)]);
+            //p.y += ((float)iso - (float)data[gA(cx + 1, cy, cz)]) / ((float)data[gA(cx + 1, cy + 1, cz)] - (float)data[gA(cx + 1, cy, cz)]);
+            p.y += (iso - x1y0z0) / (x1y1z0 - x1y0z0);
             points++;
         }
 
         if ((pointCode & EDGE10) != 0)
         {
             p.x += 1.0f;
-            p.y += ((float)iso - (float)data[gA(cx + 1, cy, cz + 1)]) / ((float)data[gA(cx + 1, cy + 1, cz + 1)] - (float)data[gA(cx + 1, cy, cz + 1)]);
+            //p.y += ((float)iso - (float)data[gA(cx + 1, cy, cz + 1)]) / ((float)data[gA(cx + 1, cy + 1, cz + 1)] - (float)data[gA(cx + 1, cy, cz + 1)]);
+            p.y += (iso - x1y0z1) / (x1y1z1 - x1y0z1);
             p.z += 1.0f;
             points++;
         }
@@ -464,7 +559,8 @@ public class DualMarching
         if ((pointCode & EDGE11) != 0)
         {
             p.z += 1.0f;
-            p.y += ((float)iso - (float)data[gA(cx, cy, cz + 1)]) / ((float)data[gA(cx, cy + 1, cz + 1)] - (float)data[gA(cx, cy, cz + 1)]);
+            //p.y += ((float)iso - (float)data[gA(cx, cy, cz + 1)]) / ((float)data[gA(cx, cy + 1, cz + 1)] - (float)data[gA(cx, cy, cz + 1)]);
+            p.y += (iso - x0y0z1) / (x0y1z1 - x0y0z1);
             points++;
         }
 
@@ -478,8 +574,10 @@ public class DualMarching
         v.x += p.x;
         v.y += p.y;
         v.z += p.z;
-
+        
+#if PROFILE
         Profiler.EndSample();
+#endif
         return v;
     }
 
@@ -490,7 +588,9 @@ public class DualMarching
 
     private int GetDualPointCode(float[] data, int cx, int cy, int cz, int edge)
     {
+#if PROFILE
         Profiler.BeginSample("GetDualPointCode");
+#endif
         int cubeCode = GetCellCode(data, cx, cy, cz);
 
         // is manifold dual marching cubes desired?
@@ -550,7 +650,9 @@ public class DualMarching
                 return dualPointsList[cubeCode, i];
             }
         }
+#if PROFILE
         Profiler.EndSample();
+#endif
         return 0;
     }
 
@@ -567,7 +669,9 @@ public class DualMarching
     /// </summary>
     private bool ShouldFlip(Vector3 A, Vector3 B, Vector3 C, Vector3 D)
     {
+#if PROFILE
         Profiler.BeginSample("ShouldFlip");
+#endif
         // A - D
         // | \ |
         // B - C
@@ -580,7 +684,9 @@ public class DualMarching
         Vector3 DC = C - D;
 
         float test = Vector3.Angle(BA, BC) + Vector3.Angle(DA, DC);
+#if PROFILE
         Profiler.EndSample();
+#endif
         return test >= 180.0f;
 
     }
@@ -599,7 +705,9 @@ public class DualMarching
     /// <param name="verts">Vertices list.</param>
     private void AddQuad(Vector3 A, Vector3 B, Vector3 C, Vector3 D, bool entering, IList<Vector3> verts)
     {
+#if PROFILE
         Profiler.BeginSample("AddQuad");
+#endif
         if (entering)
         {
             // Testing if this triangulation is NOT ideal:
@@ -673,30 +781,27 @@ public class DualMarching
                 verts.Add(C);
             }
         }
+#if PROFILE
         Profiler.EndSample();
-    }
-
-    private bool IsSkinny(Vector3 A, Vector3 B, Vector3 C) 
-    {
-        Vector3 BA = A - B;
-        Vector3 CB = B - C;
-        Vector3 CA = A - C;
-
-        return (Vector3.Angle(BA, CB) < 15.0) || (Vector3.Angle(CB, CA) < 15.0) || (Vector3.Angle(CA, BA) < 15.0);
+#endif
     }
 
     public void Generate(float[] data, int width, int height, int depth, IList<Vector3> verts, IList<int> indices)
     {
-        Profiler.BeginSample("Generate");
+        Profiler.BeginSample("Dual Marching Cubes Generate");
         //this.data = data;
         this.width = width;
         this.height = height;
         this.depth = depth;
         this.dims = new int[] { width, height, depth };
 
-        int reducedX = width - 1;
-        int reducedY = height - 1;
-        int reducedZ = depth - 1;
+        Profiler.BeginSample("Compute Cell Codes");
+        ComputeCellCodes(data);
+        Profiler.EndSample();
+
+        int reducedX = width - 2;
+        int reducedY = height - 2;
+        int reducedZ = depth - 2;
 
         Vector3 vertex0;
         Vector3 vertex1;
@@ -708,96 +813,200 @@ public class DualMarching
         float offset;
 
         List<Vector3> vertices = new List<Vector3>();
-
+        
         Profiler.BeginSample("Triple for loops");
-        // iterate voxels
-        for (int z = 0; z < reducedZ; ++z)
+        for (int z = 1; z < reducedZ; z++)
         {
-            for (int y = 0; y < reducedY; ++y)
+            for (int y = 1; y < reducedY; y++)
             {
-                for (int x = 0; x < reducedX; ++x)
+                for (int x = 0; x < reducedX; x++)
                 {
                     center = data[gA(x, y, z)];
                     // construct quad for x edge
-                    if (z > 0 && y > 0)
+                    // if (z > 0 && y > 0)
+                    // is edge intersected?
+                    offset = data[gA(x + 1, y, z)];
+                    bool entering = center < iso && offset >= iso;
+                    bool exiting = center >= iso && offset < iso;
+                    if (entering || exiting)
                     {
-                        // is edge intersected?
-                        offset = data[gA(x + 1, y, z)];
-                        bool entering = center < iso && offset >= iso;
-                        bool exiting = center >= iso && offset < iso;
-                        if (entering || exiting)
-                        {
-                            // generate quad
-                            pointCode = GetDualPointCode(data, x, y, z, EDGE0);
-                            vertex0 = CalculateDualPoint(data, x, y, z, pointCode);
+                        // generate quad
+                        pointCode = GetDualPointCode(data, x, y, z, EDGE0);
+                        vertex0 = CalculateDualPoint(data, x, y, z, pointCode);
 
-                            pointCode = GetDualPointCode(data, x, y, z - 1, EDGE2);
-                            vertex1 = CalculateDualPoint(data, x, y, z - 1, pointCode);
+                        pointCode = GetDualPointCode(data, x, y, z - 1, EDGE2);
+                        vertex1 = CalculateDualPoint(data, x, y, z - 1, pointCode);
 
-                            pointCode = GetDualPointCode(data, x, y - 1, z - 1, EDGE6);
-                            vertex2 = CalculateDualPoint(data, x, y - 1, z - 1, pointCode);
+                        pointCode = GetDualPointCode(data, x, y - 1, z - 1, EDGE6);
+                        vertex2 = CalculateDualPoint(data, x, y - 1, z - 1, pointCode);
 
-                            pointCode = GetDualPointCode(data, x, y - 1, z, EDGE4);
-                            vertex3 = CalculateDualPoint(data, x, y - 1, z, pointCode);
+                        pointCode = GetDualPointCode(data, x, y - 1, z, EDGE4);
+                        vertex3 = CalculateDualPoint(data, x, y - 1, z, pointCode);
 
-                            AddQuad(vertex0, vertex1, vertex2, vertex3, exiting, verts); // Note exiting, not entering 
-                        }
-                    }
-
-                    // construct quad for y edge
-                    if (z > 0 && x > 0)
-                    {
-                        // is edge intersected?
-                        offset = data[gA(x, y + 1, z)];
-                        bool entering = center < iso && offset >= iso;
-                        bool exiting = center >= iso && offset < iso;
-                        if (entering || exiting)
-                        {
-                            // generate quad
-                            pointCode = GetDualPointCode(data, x, y, z, EDGE8);
-                            vertex0 = CalculateDualPoint(data, x, y, z, pointCode);
-
-                            pointCode = GetDualPointCode(data, x, y, z - 1, EDGE11);
-                            vertex1 = CalculateDualPoint(data, x, y, z - 1, pointCode);
-
-                            pointCode = GetDualPointCode(data, x - 1, y, z - 1, EDGE10);
-                            vertex2 = CalculateDualPoint(data, x - 1, y, z - 1, pointCode);
-
-                            pointCode = GetDualPointCode(data, x - 1, y, z, EDGE9);
-                            vertex3 = CalculateDualPoint(data, x - 1, y, z, pointCode);
-
-                            AddQuad(vertex0, vertex1, vertex2, vertex3, entering, verts); 
-                        }
-                    }
-
-                    // construct quad for z edge
-                    if (x > 0 && y > 0)
-                    {
-                        // is edge intersected?
-                        offset = data[gA(x, y, z + 1)];
-                        bool entering = center < iso && offset >= iso;
-                        bool exiting = center >= iso && offset < iso;
-                        if (entering || exiting)
-                        {
-                            // generate quad
-                            pointCode = GetDualPointCode(data, x, y, z, EDGE3);
-                            vertex0 = CalculateDualPoint(data, x, y, z, pointCode);
-
-                            pointCode = GetDualPointCode(data, x - 1, y, z, EDGE1);
-                            vertex1 = CalculateDualPoint(data, x - 1, y, z, pointCode);
-
-                            pointCode = GetDualPointCode(data, x - 1, y - 1, z, EDGE5);
-                            vertex2 = CalculateDualPoint(data, x - 1, y - 1, z, pointCode);
-
-                            pointCode = GetDualPointCode(data, x, y - 1, z, EDGE7);
-                            vertex3 = CalculateDualPoint(data, x, y - 1, z, pointCode);
-
-                            AddQuad(vertex0, vertex1, vertex2, vertex3, entering, verts);
-                        }
+                        AddQuad(vertex0, vertex1, vertex2, vertex3, exiting, verts); // Note exiting, not entering 
                     }
                 }
             }
         }
+        
+        for (int z = 1; z < reducedZ; z++)
+        {
+            for (int y = 0; y < reducedY; y++)
+            {
+                for (int x = 1; x < reducedX; x++)
+                {
+                    center = data[gA(x, y, z)];
+                    // construct quad for y edge
+                    //if (z > 0 && x > 0)
+                    // is edge intersected?
+                    offset = data[gA(x, y + 1, z)];
+                    bool entering = center < iso && offset >= iso;
+                    bool exiting = center >= iso && offset < iso;
+                    if (entering || exiting)
+                    {
+                        // generate quad
+                        pointCode = GetDualPointCode(data, x, y, z, EDGE8);
+                        vertex0 = CalculateDualPoint(data, x, y, z, pointCode);
+
+                        pointCode = GetDualPointCode(data, x, y, z - 1, EDGE11);
+                        vertex1 = CalculateDualPoint(data, x, y, z - 1, pointCode);
+
+                        pointCode = GetDualPointCode(data, x - 1, y, z - 1, EDGE10);
+                        vertex2 = CalculateDualPoint(data, x - 1, y, z - 1, pointCode);
+
+                        pointCode = GetDualPointCode(data, x - 1, y, z, EDGE9);
+                        vertex3 = CalculateDualPoint(data, x - 1, y, z, pointCode);
+
+                        AddQuad(vertex0, vertex1, vertex2, vertex3, entering, verts); 
+                    }
+                }
+            }
+        }
+
+        for (int z = 0; z < reducedZ; z++)
+        {
+            for (int y = 1; y < reducedY; y++)
+            {
+                for (int x = 1; x < reducedX; x++)
+                {
+                    center = data[gA(x, y, z)];
+                    // construct quad for z edge
+                    //if (x > 0 && y > 0)
+                    // is edge intersected?
+                    offset = data[gA(x, y, z + 1)];
+                    bool entering = center < iso && offset >= iso;
+                    bool exiting = center >= iso && offset < iso;
+                    if (entering || exiting)
+                    {
+                        // generate quad
+                        pointCode = GetDualPointCode(data, x, y, z, EDGE3);
+                        vertex0 = CalculateDualPoint(data, x, y, z, pointCode);
+
+                        pointCode = GetDualPointCode(data, x - 1, y, z, EDGE1);
+                        vertex1 = CalculateDualPoint(data, x - 1, y, z, pointCode);
+
+                        pointCode = GetDualPointCode(data, x - 1, y - 1, z, EDGE5);
+                        vertex2 = CalculateDualPoint(data, x - 1, y - 1, z, pointCode);
+
+                        pointCode = GetDualPointCode(data, x, y - 1, z, EDGE7);
+                        vertex3 = CalculateDualPoint(data, x, y - 1, z, pointCode);
+
+                        AddQuad(vertex0, vertex1, vertex2, vertex3, entering, verts);
+                    }
+                }
+            }
+        }
+
+        //// iterate voxels
+        //for (int z = 0; z < reducedZ; ++z)
+        //{
+        //    for (int y = 0; y < reducedY; ++y)
+        //    {
+        //        for (int x = 0; x < reducedX; ++x)
+        //        {
+        //            //Profiler.BeginSample("Inner loop");
+        //            center = data[gA(x, y, z)];
+        //            // construct quad for x edge
+        //            if (z > 0 && y > 0)
+        //            {
+        //                // is edge intersected?
+        //                offset = data[gA(x + 1, y, z)];
+        //                bool entering = center < iso && offset >= iso;
+        //                bool exiting = center >= iso && offset < iso;
+        //                if (entering || exiting)
+        //                {
+        //                    // generate quad
+        //                    pointCode = GetDualPointCode(data, x, y, z, EDGE0);
+        //                    vertex0 = CalculateDualPoint(data, x, y, z, pointCode);
+
+        //                    pointCode = GetDualPointCode(data, x, y, z - 1, EDGE2);
+        //                    vertex1 = CalculateDualPoint(data, x, y, z - 1, pointCode);
+
+        //                    pointCode = GetDualPointCode(data, x, y - 1, z - 1, EDGE6);
+        //                    vertex2 = CalculateDualPoint(data, x, y - 1, z - 1, pointCode);
+
+        //                    pointCode = GetDualPointCode(data, x, y - 1, z, EDGE4);
+        //                    vertex3 = CalculateDualPoint(data, x, y - 1, z, pointCode);
+
+        //                    AddQuad(vertex0, vertex1, vertex2, vertex3, exiting, verts); // Note exiting, not entering 
+        //                }
+        //            }
+
+        //            // construct quad for y edge
+        //            if (z > 0 && x > 0)
+        //            {
+        //                // is edge intersected?
+        //                offset = data[gA(x, y + 1, z)];
+        //                bool entering = center < iso && offset >= iso;
+        //                bool exiting = center >= iso && offset < iso;
+        //                if (entering || exiting)
+        //                {
+        //                    // generate quad
+        //                    pointCode = GetDualPointCode(data, x, y, z, EDGE8);
+        //                    vertex0 = CalculateDualPoint(data, x, y, z, pointCode);
+
+        //                    pointCode = GetDualPointCode(data, x, y, z - 1, EDGE11);
+        //                    vertex1 = CalculateDualPoint(data, x, y, z - 1, pointCode);
+
+        //                    pointCode = GetDualPointCode(data, x - 1, y, z - 1, EDGE10);
+        //                    vertex2 = CalculateDualPoint(data, x - 1, y, z - 1, pointCode);
+
+        //                    pointCode = GetDualPointCode(data, x - 1, y, z, EDGE9);
+        //                    vertex3 = CalculateDualPoint(data, x - 1, y, z, pointCode);
+
+        //                    AddQuad(vertex0, vertex1, vertex2, vertex3, entering, verts); 
+        //                }
+        //            }
+
+        //            // construct quad for z edge
+        //            if (x > 0 && y > 0)
+        //            {
+        //                // is edge intersected?
+        //                offset = data[gA(x, y, z + 1)];
+        //                bool entering = center < iso && offset >= iso;
+        //                bool exiting = center >= iso && offset < iso;
+        //                if (entering || exiting)
+        //                {
+        //                    // generate quad
+        //                    pointCode = GetDualPointCode(data, x, y, z, EDGE3);
+        //                    vertex0 = CalculateDualPoint(data, x, y, z, pointCode);
+
+        //                    pointCode = GetDualPointCode(data, x - 1, y, z, EDGE1);
+        //                    vertex1 = CalculateDualPoint(data, x - 1, y, z, pointCode);
+
+        //                    pointCode = GetDualPointCode(data, x - 1, y - 1, z, EDGE5);
+        //                    vertex2 = CalculateDualPoint(data, x - 1, y - 1, z, pointCode);
+
+        //                    pointCode = GetDualPointCode(data, x, y - 1, z, EDGE7);
+        //                    vertex3 = CalculateDualPoint(data, x, y - 1, z, pointCode);
+
+        //                    AddQuad(vertex0, vertex1, vertex2, vertex3, entering, verts);
+        //                }
+        //            }
+        //            //Profiler.EndSample();
+        //        }
+        //    }
+        //}
         Profiler.EndSample();
 
         Profiler.BeginSample("Triangle generation");
@@ -812,6 +1021,8 @@ public class DualMarching
             indices.Add((i * 6) + 5);
         }
         Profiler.EndSample();
+
+        //Debug.Log($"Generated {verts.Count} vertices and {indices.Count / 3} triangles.");
 
         // TODO find a better way to remove skinnies
 
